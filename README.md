@@ -1,0 +1,130 @@
+# Paper Reader
+
+> Read English papers without leaving the page: select any passage and get an
+> instant Japanese translation + glossary + gist, streamed from a **local LLM**.
+> Fully offline, no API key, no cloud.
+
+英語論文の PDF をブラウザで開き、**分からない箇所を選択するとその場で
+日本語訳＋用語解説＋主旨**が右ペインにストリーム表示されるローカルツール。
+コピー → 画面切替 → 貼付 → 復帰 の往復をなくすのが目的。
+
+- **完全ローカル**。PDFもテキストも一切外部に送らない。解説は
+  あなたのPC内で動く **ローカルLLM（Ollama）** が生成。APIキー・課金なし。
+- 既定モデル `qwen2.5:7b`（16GB Macで快適）。`.env` で変更可
+  （高品質: `qwen2.5:14b` / 速度優先: `qwen2.5:3b`）。
+
+## セットアップ
+
+### 1. ローカルLLM（Ollama・初回のみ）
+
+Ollama サーバは**バックグラウンド常駐**させる（ターミナルを開きっぱなしにしない）。
+
+**推奨: 公式アプリ** — <https://ollama.com/download> の `.dmg` を Applications に
+入れて一度起動。以後メニューバー常駐＆ログイン時自動起動（`ollama` CLI も使える）。
+
+**または Homebrew:**
+```bash
+brew install ollama
+brew services start ollama   # launchd 常駐。再起動後も自動。ターミナル不要
+```
+
+どちらの方法でも最後にモデルを取得（初回のみ・約5GB）:
+```bash
+ollama pull qwen2.5:7b
+```
+
+> アプリ化後はアプリ側が Ollama 未起動を検知して自動起動するため、
+> 配布後のユーザーはこの手順を意識しない。
+
+### 2. アプリ本体
+
+```bash
+git clone https://github.com/nowex35/paper-reader.git
+cd paper-reader
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+cp .env.example .env         # 通常は編集不要（既定で qwen2.5:7b）
+```
+
+> Ollama 未起動 / モデル未取得でもアプリは壊れず、画面にセットアップ
+> 手順が表示される。準備後にページ再読み込みで通常動作に切り替わる。
+
+## 起動
+
+### A. アプリアイコンから（推奨・ターミナル不要）
+
+`Paper Reader.app` をダブルクリック。専用ウィンドウで開く。
+Ollama が未起動なら自動で起動を試み、空きポートで内蔵サーバを立てる。
+
+- Dock に常駐させたい場合は `Paper Reader.app` を `/Applications` か Dock にドラッグ
+  （ランチャは絶対パス固定なので移動しても動く）
+- 不具合時のログ: `.app.log`
+- 仕組み: `desktop.py` が Ollama 確認 → FastAPI を空きポート起動 →
+  pywebview のネイティブ窓で表示（`webview` を閉じると終了）
+
+### B. 開発用（ブラウザ + ターミナル）
+
+```bash
+source .venv/bin/activate
+uvicorn server:app --port 8010
+```
+
+ブラウザで <http://localhost:8010> を開く。
+
+> ⚠️ 指定ポートが他プロセスに使われていると別サーバの応答が返ることがある。
+> 空いているポート（例: 8010）を使う。使用中ポートの確認:
+> `lsof -nP -iTCP:8010 -sTCP:LISTEN`
+
+## 使い方
+
+1. 「PDFを開く」or ドラッグ&ドロップで論文を表示
+2. 分からない箇所をドラッグで選択
+3. 選択横の **「解説」ボタン**（または **⌘/Ctrl + E**）→ 右ペインに訳と解説
+4. 上部 **「選択で自動実行」** をオンにすると、選択しただけで自動実行
+   （拾い読みでも走り無駄にLLMが回るので注意。既定はオフ＝1タップ）
+5. 各カードの **「コピー(原文+解説)」** で Notion へそのまま貼れる形をコピー
+
+## メモ機能（自分の言葉でまとめて理解を深める）
+
+すべて 1 画面で完結（タブ遷移・別ページなし）。ChatGPT のような構成。
+
+### 読んだ論文の一覧 — 左サイドバー
+
+- 上部 **「☰ 一覧」** でサイドバーを開閉（状態は記憶。「«」でも閉じる）
+- 全メモを更新日順に表示。**タイトル/PDF名で絞り込み**、件数表示
+- 項目クリック → そのメモを下部「このメモ」に読み込み（**PDF を開かなくても**
+  読み返し・再編集できる）。選択中はハイライト。各項目ホバーで「×」削除
+- 保存・削除はサイドバーへ即時反映
+
+### 読みながら書く — 下部メモパネル
+
+- 上部 **「📝 メモ」** で開閉（⌘/Ctrl+S でも開いて保存）。上端ドラッグで高さ調整
+- タイトル＋本文（Markdown可）。**入力すると自動保存**、**「プレビュー」** で整形表示
+- 論文の同定は PDF 内容ハッシュなので、同じ論文を開けば
+  （ファイル名を変えても）前回のメモが自動で復元される
+
+保存先は **`notes/<slug>-<id>.md`**（frontmatter 付き Markdown）。
+ツール外からも読め、`git` で履歴管理でき、ブラウザを消しても残る。
+
+## 設定
+
+| 項目 | 場所 | 既定 |
+|---|---|---|
+| モデル | `.env` の `OLLAMA_MODEL` | `qwen2.5:7b` |
+| Ollama エンドポイント | `.env` の `OLLAMA_HOST` | `http://localhost:11434` |
+| 解説の構成・口調 | `server.py` の `SYSTEM_INSTRUCTION` | 訳／用語／主旨の3節 |
+
+> APIキーは不要。解説はすべてローカルの Ollama で生成され、PDF・選択テキストは
+> 一切外部に送信されない。
+
+## 今後の拡張候補（未実装）
+
+- pdf.js をローカル同梱して完全オフライン化
+- 数式の KaTeX レンダリング
+- 解説カードのエクスポート機能（Markdown / クリップボード整形の拡充）
+
+## ライセンス
+
+[MIT License](LICENSE) © 2026 Hayate Aizawa

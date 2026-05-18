@@ -1,0 +1,309 @@
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+  color: #1c1c1e;
+  background: #f2f2f4;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- top bar ---- */
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #fff;
+  border-bottom: 1px solid #dadade;
+  flex: none;
+}
+#topbar .brand { font-size: 15px; }
+#topbar .spacer { flex: 1; }
+.muted { color: #8a8a8e; font-size: 13px; }
+.auto-toggle { font-size: 13px; color: #444; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+button {
+  font: inherit;
+  padding: 6px 12px;
+  border: 1px solid #c5c5ca;
+  background: #fff;
+  border-radius: 7px;
+  cursor: pointer;
+}
+button:hover { background: #f0f0f3; }
+
+/* ---- layout ---- */
+#main { flex: 1; display: flex; min-height: 0; }
+#pdfPane { flex: 1; overflow: auto; min-width: 280px; }
+#sidePane { width: 420px; flex: none; overflow: auto; background: #fff; border-left: 1px solid #dadade; }
+#resizer { width: 6px; cursor: col-resize; background: #e3e3e7; flex: none; }
+#resizer:hover { background: #b9b9c0; }
+
+/* 確定時は contents で無効化（コンテナがペイン直下に置かれる）。
+   ピンチ中だけ JS が display:block + 実寸を設定しスクロール範囲を確保。 */
+#pdfViewport { display: contents; }
+#pdfContainer {
+  /* 中身（最も広いページ）にフィット。ペインより狭い時だけ中央寄せ。
+     これで flex中央揃え＋幅超過の「左端に戻れない」問題を回避。 */
+  width: max-content;
+  min-width: 100%;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  transform-origin: 0 0;
+}
+#dropHint { text-align: center; color: #6a6a6e; margin-top: 18vh; }
+#dropHint p { margin: 6px 0; }
+#pdfPane.dragover { outline: 3px dashed #4c8dff; outline-offset: -8px; }
+
+/* ---- pdf page ---- */
+.pageWrap {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 1px 6px rgba(0,0,0,.18);
+}
+.pageWrap canvas { display: block; }
+
+/* pdf.js text layer (3.11.174) */
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  /* WebKit(WKWebView=アプリ窓)では既定 auto だと透明spanを選択できない。
+     明示 text で選択可能に（祖先の none も上書きできる）。Chromeは無害。 */
+  -webkit-user-select: text;
+  user-select: text;
+}
+.textLayer span,
+.textLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.textLayer span.markedContent { top: 0; height: 0; }
+.textLayer ::selection { background: rgba(76, 141, 255, .35); }
+
+/* ---- floating button ---- */
+#explainFab {
+  position: fixed;
+  z-index: 50;
+  background: #1c6dff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 13px;
+  font-size: 13px;
+  box-shadow: 0 3px 10px rgba(0,0,0,.25);
+}
+#explainFab:hover { background: #0b59e6; }
+
+/* ---- results ---- */
+#results { padding: 14px; }
+#results .empty { color: #9a9a9e; font-size: 14px; padding: 30px 6px; text-align: center; }
+.card {
+  border: 1px solid #e3e3e7;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.card .src {
+  background: #f6f6f8;
+  border-bottom: 1px solid #e3e3e7;
+  font-size: 12.5px;
+  color: #555;
+  padding: 8px 12px;
+  max-height: 84px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.card .body { padding: 4px 14px 10px; font-size: 14px; line-height: 1.7; }
+.card .body h2 { font-size: 14px; margin: 14px 0 4px; color: #1c6dff; }
+.card .body p { margin: 6px 0; }
+.card .body ul { margin: 4px 0; padding-left: 20px; }
+.card .body code { background: #f0f0f3; padding: 1px 4px; border-radius: 4px; }
+.card .toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 6px 12px 10px;
+  border-top: 1px solid #f0f0f3;
+}
+.card .toolbar button { padding: 4px 10px; font-size: 12px; }
+.card.loading .body::after { content: " ▍"; color: #1c6dff; }
+
+/* ---- memo panel (下部トグル) ---- */
+#memoToggle.active { background: #1c6dff; color: #fff; border-color: #1c6dff; }
+button.danger { color: #c0362c; border-color: #e3b4af; }
+button.danger:hover { background: #fdecea; }
+
+#memoPanel { display: none; }
+#memoPanel.open {
+  display: flex;
+  flex-direction: column;
+  height: var(--memo-h, 300px);
+  flex: none;
+  background: #fff;
+  border-top: 1px solid #dadade;
+  box-shadow: 0 -2px 10px rgba(0,0,0,.06);
+}
+#memoDrag { height: 6px; cursor: row-resize; background: #e3e3e7; flex: none; }
+#memoDrag:hover { background: #b9b9c0; }
+
+#memoHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #ececef;
+  flex: none;
+}
+#memoHead .spacer { flex: 1; }
+#memoHead button { padding: 4px 10px; font-size: 12.5px; }
+#memoHead #memoClose { padding: 2px 9px; font-size: 15px; line-height: 1; }
+
+.memoView { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; }
+#memoEdit { display: flex; flex-direction: column; gap: 8px; }
+#memoTitle {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 7px 10px;
+  border: 1px solid #d8d8dd;
+  border-radius: 7px;
+  flex: none;
+}
+#memoBody {
+  flex: 1;
+  min-height: 80px;
+  resize: none;
+  font: 13.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 10px 12px;
+  border: 1px solid #d8d8dd;
+  border-radius: 7px;
+}
+#memoBody:disabled { background: #f6f6f8; color: #9a9a9e; }
+#memoPreview {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 4px 0;
+  font-size: 14px;
+  line-height: 1.75;
+}
+#memoPreview h1, #memoPreview h2 { font-size: 15px; margin: 14px 0 6px; }
+#memoPreview code { background: #f0f0f3; padding: 1px 4px; border-radius: 4px; }
+#memoPreview ul { padding-left: 20px; }
+
+.memoLabel { font-size: 13px; color: #444; }
+
+/* ---- 左サイドバー: 読んだ論文の一覧（ChatGPT風） ---- */
+#listToggle.active { background: #1c6dff; color: #fff; border-color: #1c6dff; }
+
+#listPane {
+  flex: none;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  background: #f7f7f8;
+  border-right: 1px solid #dadade;
+  overflow: hidden;
+  transition: width .16s ease;
+}
+#listPane.collapsed {
+  width: 0;
+  border-right: 0;
+}
+#listHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 8px;
+  flex: none;
+}
+#listHead strong { font-size: 13.5px; white-space: nowrap; }
+#listHead .spacer { flex: 1; }
+#listCount { font-size: 11.5px; }
+#listCollapse {
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  color: #8a8a8e;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+#listCollapse:hover { background: #e6e6ea; color: #444; }
+#listSearch {
+  font: inherit;
+  font-size: 12.5px;
+  margin: 0 12px 8px;
+  padding: 6px 10px;
+  border: 1px solid #d8d8dd;
+  border-radius: 7px;
+  background: #fff;
+}
+#listItems {
+  list-style: none;
+  margin: 0;
+  padding: 4px 8px 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.li-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+.li-item:hover { background: #ececee; }
+.li-item.active { background: #e4ecff; }
+.li-main { flex: 1; min-width: 0; }
+.li-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #1c1c1e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.li-sub {
+  font-size: 11px;
+  color: #8a8a8e;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.li-del {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: #b0b0b4;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 6px;
+  opacity: 0;
+}
+.li-item:hover .li-del { opacity: 1; }
+.li-del:hover { background: #e0c4c0; color: #c0362c; }
+.li-empty {
+  color: #9a9a9e;
+  font-size: 12.5px;
+  line-height: 1.7;
+  padding: 18px 10px;
+}

@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+pdfs/
+*.app/
+.app.log
+
+# ユーザーの個人メモ（論文ごとのまとめ）はリポジトリに含めない
+notes/*.md
+!notes/.gitkeep
+.DS_Store

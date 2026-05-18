@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Paper Reader</title>
+<link rel="stylesheet" href="/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+</head>
+<body>
+  <header id="topbar">
+    <button id="listToggle" title="読んだ論文の一覧を開閉">☰ 一覧</button>
+    <strong class="brand">📄 Paper Reader</strong>
+    <button id="openBtn">PDFを開く</button>
+    <span id="fileName" class="muted">ファイル未選択</span>
+    <label class="auto-toggle" title="選択しただけで自動で解説を実行">
+      <input type="checkbox" id="autoMode" /> 選択で自動実行
+    </label>
+    <button id="memoToggle" title="メモパネルの開閉">📝 メモ</button>
+    <span class="spacer"></span>
+    <span id="status" class="muted"></span>
+  </header>
+
+  <div id="main">
+    <aside id="listPane">
+      <div id="listHead">
+        <strong>📚 読んだ論文</strong>
+        <span id="listCount" class="muted"></span>
+        <span class="spacer"></span>
+        <button id="listCollapse" title="一覧を隠す">«</button>
+      </div>
+      <input id="listSearch" type="search" placeholder="タイトル・PDF名で絞り込み" />
+      <ul id="listItems"></ul>
+    </aside>
+
+    <div id="pdfPane">
+      <div id="pdfViewport">
+        <div id="pdfContainer">
+          <div id="dropHint">
+            <p>PDFをここにドラッグ&ドロップ、または「PDFを開く」</p>
+            <p class="muted">テキストを選択 → その場の「解説」ボタン（または ⌘/Ctrl+E）</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="resizer"></div>
+    <div id="sidePane">
+      <div id="results">
+        <div class="empty">選択した箇所の日本語訳と解説がここに出ます。</div>
+      </div>
+    </div>
+  </div>
+
+  <section id="memoPanel">
+    <div id="memoDrag" title="ドラッグで高さ調整"></div>
+    <div id="memoHead">
+      <strong class="memoLabel">📝 このメモ</strong>
+      <span id="memoStatus" class="muted"></span>
+      <span class="spacer"></span>
+      <button id="memoPreviewBtn" title="編集 / プレビュー切替">プレビュー</button>
+      <button id="memoSaveBtn">保存 ⌘S</button>
+      <button id="memoDeleteBtn" class="danger" title="このメモを削除">削除</button>
+      <button id="memoClose" title="閉じる">×</button>
+    </div>
+
+    <div id="memoEdit" class="memoView">
+      <input id="memoTitle" type="text" placeholder="論文タイトル（一覧の見出しになります）" />
+      <textarea id="memoBody" placeholder="自分の言葉でまとめる（Markdown可）。&#10;例: 何の問題を / どう解いた / 何が新しい / 自分の研究との関係 …"></textarea>
+      <div id="memoPreview" hidden></div>
+    </div>
+  </section>
+
+  <button id="explainFab" hidden>解説 ⌘E</button>
+  <input type="file" id="fileInput" accept="application/pdf" hidden />
+
+  <script src="/app.js"></script>
+</body>
+</html>
