@@ -53,18 +53,32 @@ cp .env.example .env         # 通常は編集不要（既定で qwen2.5:7b）
 
 ## 起動
 
-### A. アプリアイコンから（推奨・ターミナル不要）
+### A. ネイティブ窓で起動（推奨・ビルド不要・全環境）
 
-`Paper Reader.app` をダブルクリック。専用ウィンドウで開く。
-Ollama が未起動なら自動で起動を試み、空きポートで内蔵サーバを立てる。
+```bash
+source .venv/bin/activate
+python desktop.py
+```
 
-- Dock に常駐させたい場合は `Paper Reader.app` を `/Applications` か Dock にドラッグ
-  （ランチャは絶対パス固定なので移動しても動く）
-- 不具合時のログ: `.app.log`
-- 仕組み: `desktop.py` が Ollama 確認 → FastAPI を空きポート起動 →
-  pywebview のネイティブ窓で表示（`webview` を閉じると終了）
+専用ウィンドウで開く。Ollama が未起動なら自動で起動を試み、空きポートで
+内蔵サーバを立てる（`desktop.py` が Ollama 確認 → FastAPI を空きポート起動 →
+pywebview のネイティブ窓で表示。窓を閉じると終了）。不具合時のログは `.app.log`。
 
-### B. 開発用（ブラウザ + ターミナル）
+### B. アプリアイコンから（Dock に置きたい人向け・macOS）
+
+`.app` は中のランチャが絶対パス固定で**環境依存**のためリポジトリには含めない。
+clone した自分のマシンで一度だけ生成スクリプトを実行する:
+
+```bash
+./make_app.sh          # この clone の場所に合わせて Paper Reader.app を生成
+```
+
+生成された `Paper Reader.app` をダブルクリックで起動。ターミナル不要。
+Dock に常駐させたい場合は `/Applications` か Dock にドラッグ
+（ランチャは生成時の絶対パス固定なので移動しても動く）。
+リポジトリを別の場所へ移動・再 clone したら `./make_app.sh` を再実行する。
+
+### C. 開発用（ブラウザ + ターミナル）
 
 ```bash
 source .venv/bin/activate
