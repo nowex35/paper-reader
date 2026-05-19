@@ -20,7 +20,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 # 解説はローカルLLM（Ollama）で生成。クラウド送信なし・APIキー不要。
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b").strip()
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:4b-instruct").strip()
 
 BASE_DIR = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"

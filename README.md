@@ -10,8 +10,8 @@
 
 - **完全ローカル**。PDFもテキストも一切外部に送らない。解説は
   あなたのPC内で動く **ローカルLLM（Ollama）** が生成。APIキー・課金なし。
-- 既定モデル `qwen2.5:7b`（16GB Macで快適）。`.env` で変更可
-  （高品質: `qwen2.5:14b` / 速度優先: `qwen2.5:3b`）。
+- 既定モデル `qwen3:4b-instruct`（思考なし・~2.5GB、16GB Macで軽快・旧7B相当の
+  品質）。`.env` で変更可（高品質: `qwen3:8b` / 和訳の自然さ重視: `gemma3:12b`）。
 
 ## セットアップ
 
@@ -28,9 +28,9 @@ brew install ollama
 brew services start ollama   # launchd 常駐。再起動後も自動。ターミナル不要
 ```
 
-どちらの方法でも最後にモデルを取得（初回のみ・約5GB）:
+どちらの方法でも最後にモデルを取得（初回のみ・約2.5GB）:
 ```bash
-ollama pull qwen2.5:7b
+ollama pull qwen3:4b-instruct
 ```
 
 > アプリ化後はアプリ側が Ollama 未起動を検知して自動起動するため、
@@ -45,7 +45,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-cp .env.example .env         # 通常は編集不要（既定で qwen2.5:7b）
+cp .env.example .env         # 通常は編集不要（既定で qwen3:4b-instruct）
 ```
 
 > Ollama 未起動 / モデル未取得でもアプリは壊れず、画面にセットアップ
@@ -126,7 +126,7 @@ uvicorn server:app --port 8010
 
 | 項目 | 場所 | 既定 |
 |---|---|---|
-| モデル | `.env` の `OLLAMA_MODEL` | `qwen2.5:7b` |
+| モデル | `.env` の `OLLAMA_MODEL` | `qwen3:4b-instruct` |
 | Ollama エンドポイント | `.env` の `OLLAMA_HOST` | `http://localhost:11434` |
 | 解説の構成・口調 | `server.py` の `SYSTEM_INSTRUCTION` | 訳／用語／主旨の3節 |
 
