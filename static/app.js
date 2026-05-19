@@ -8,7 +8,6 @@ const els = {
   openBtn: document.getElementById("openBtn"),
   fileInput: document.getElementById("fileInput"),
   fileName: document.getElementById("fileName"),
-  autoMode: document.getElementById("autoMode"),
   status: document.getElementById("status"),
   pdfPane: document.getElementById("pdfPane"),
   viewport: document.getElementById("pdfViewport"),
@@ -19,7 +18,6 @@ const els = {
   sidePane: document.getElementById("sidePane"),
 };
 
-let lastAutoText = "";
 
 /* ---------- ローカルLLM(Ollama) セットアップ確認 ---------- */
 (async () => {
@@ -306,7 +304,6 @@ function currentSelection() {
 }
 
 document.addEventListener("mouseup", () => {
-  if (els.autoMode.checked) return;
   const s = currentSelection();
   if (!s) {
     els.fab.hidden = true;
@@ -328,20 +325,6 @@ els.fab.onclick = () => {
   const s = els.fab._payload;
   if (s) explain(s.text, s.context);
 };
-
-// 自動モード
-let autoTimer = null;
-document.addEventListener("selectionchange", () => {
-  if (!els.autoMode.checked) return;
-  clearTimeout(autoTimer);
-  autoTimer = setTimeout(() => {
-    const s = currentSelection();
-    if (s && s.text !== lastAutoText) {
-      lastAutoText = s.text;
-      explain(s.text, s.context);
-    }
-  }, 650);
-});
 
 // ⌘/Ctrl + E
 document.addEventListener("keydown", (e) => {

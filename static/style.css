@@ -21,7 +21,6 @@ body {
 #topbar .brand { font-size: 15px; }
 #topbar .spacer { flex: 1; }
 .muted { color: #8a8a8e; font-size: 13px; }
-.auto-toggle { font-size: 13px; color: #444; display: flex; align-items: center; gap: 5px; cursor: pointer; }
 button {
   font: inherit;
   padding: 6px 12px;
