@@ -120,8 +120,19 @@ class ExplainRequest(BaseModel):
     context: str | None = None
 
 
+_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
+
+
+def _sanitize(s: str | None) -> str:
+    """JSON 経由で混入し得る孤立サロゲート（数式の斜体等を pdf.js 抽出時に
+    片割れだけ拾った結果）を除去。残すと UTF-8 エンコードで落ちる。"""
+    return _SURROGATE_RE.sub("", s or "")
+
+
 def build_prompt(text: str, context: str | None) -> str:
     parts = []
+    text = _sanitize(text)
+    context = _sanitize(context)
     if context and context.strip():
         parts.append("【参考: 同じページの周辺テキスト（訳出は不要、文脈把握用）】\n" + context.strip())
     parts.append("【選択箇所】\n" + text.strip())
@@ -173,11 +184,67 @@ def explain(req: ExplainRequest):
 ID_RE = re.compile(r"[0-9a-fA-F]{6,64}")
 FM_KEYS = ["id", "title", "pdf", "created", "updated"]
 
+# summary タブ = 落合フォーマット6項目。メモ本文とは別フィールドとして
+# 同じ .md 内の専用セクションに保存する（人が読めて、機械でも再パースできる）。
+# 6項目は落合陽一「先端技術とメディア表現1 #FTMA15」が出典（本ツールの考案ではない）:
+# https://www.slideshare.net/Ochyai/1-ftma15
+SUMMARY_FIELDS = [
+    ("what", "どんなもの？"),
+    ("prior", "先行研究と比べてどこがすごい？"),
+    ("method", "技術や手法のキモはどこ？"),
+    ("verify", "どうやって有効だと検証した？"),
+    ("discuss", "議論はある？"),
+    ("next", "次に読むべき論文は？"),
+]
+SUMMARY_KEYS = [k for k, _ in SUMMARY_FIELDS]
+SUMMARY_MARK = "<!--paper-reader:summary-->"
+_Q_RE = re.compile(r"^###\s.*<!--q:(\w+)-->\s*$")
+
 
 class NoteIn(BaseModel):
     title: str = "Untitled"
     body: str = ""
     pdf: str | None = None
+    summary: dict[str, str] | None = None
+
+
+def _empty_summary() -> dict:
+    return {k: "" for k in SUMMARY_KEYS}
+
+
+def _split_body(full: str) -> tuple[str, dict]:
+    """保存済み body を「メモ本文」と「summary(6項目)」に分離する。"""
+    summary = _empty_summary()
+    idx = (full or "").find(SUMMARY_MARK)
+    if idx < 0:
+        return (full or "").rstrip(), summary
+    memo = full[:idx].rstrip()
+    cur, buf = None, []
+    for line in full[idx + len(SUMMARY_MARK):].split("\n"):
+        m = _Q_RE.match(line)
+        if m:
+            if cur in summary:
+                summary[cur] = "\n".join(buf).strip()
+            cur, buf = m.group(1), []
+        elif cur:
+            buf.append(line)
+    if cur in summary:
+        summary[cur] = "\n".join(buf).strip()
+    return memo, summary
+
+
+def _compose_body(memo: str, summary: dict | None) -> str:
+    """メモ本文と summary を結合し、保存用の body 文字列を作る。"""
+    memo = (memo or "").rstrip()
+    summary = summary or {}
+    if not any((summary.get(k) or "").strip() for k in SUMMARY_KEYS):
+        return memo  # summary 未記入なら従来どおりメモのみ
+    parts = [memo, "", SUMMARY_MARK, "", "## 📝 落合まとめ", ""]
+    for key, q in SUMMARY_FIELDS:
+        parts.append(f"### {q} <!--q:{key}-->")
+        parts.append((summary.get(key) or "").strip())
+        parts.append("")
+    return "\n".join(parts).rstrip()
 
 
 def _valid_id(nid: str) -> bool:
@@ -223,12 +290,13 @@ def list_notes():
     out = []
     for p in NOTES_DIR.glob("*.md"):
         m, b = _parse(p)
+        memo, _ = _split_body(b)  # 一覧スニペットに summary を混ぜない
         out.append({
             "id": m.get("id") or p.stem.rsplit("-", 1)[-1],
             "title": m.get("title") or p.stem,
             "pdf": m.get("pdf", ""),
             "updated": m.get("updated", ""),
-            "snippet": re.sub(r"\s+", " ", b.strip())[:120],
+            "snippet": re.sub(r"\s+", " ", memo.strip())[:120],
         })
     out.sort(key=lambda x: x["updated"], reverse=True)
     return out
@@ -242,10 +310,11 @@ def get_note(nid: str):
     if not p:
         raise HTTPException(404, "note not found")
     m, b = _parse(p)
+    memo, summary = _split_body(b)
     return {
         "id": nid, "title": m.get("title", ""), "pdf": m.get("pdf", ""),
         "created": m.get("created", ""), "updated": m.get("updated", ""),
-        "body": b, "filename": p.name,
+        "body": memo, "summary": summary, "filename": p.name,
     }
 
 
@@ -265,7 +334,7 @@ def save_note(nid: str, note: NoteIn):
     if existing and existing != new_path:
         existing.unlink(missing_ok=True)
     meta = {"id": nid, "title": title, "pdf": pdf, "created": created, "updated": now}
-    _write(new_path, meta, note.body or "")
+    _write(new_path, meta, _compose_body(note.body, note.summary))
     return {"id": nid, "title": title, "pdf": pdf,
             "created": created, "updated": now, "filename": new_path.name}
 

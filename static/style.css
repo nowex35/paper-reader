@@ -65,15 +65,23 @@ button:hover { background: #f0f0f3; }
 }
 .pageWrap canvas { display: block; }
 
-/* pdf.js text layer (3.11.174) */
+/* pdf.js text layer (3.11.174) — 公式 viewer の textLayer.css に準拠。
+   WebKit(WKWebView=アプリ窓)で span と canvas グリフが横/縦にズレる事故が
+   出るため、prefix 付き text-size-adjust と transform-origin を明示する。 */
 .textLayer {
   position: absolute;
+  text-align: initial;
   inset: 0;
   overflow: hidden;
   opacity: 1;
   line-height: 1;
+  -webkit-text-size-adjust: none;
+  -moz-text-size-adjust: none;
   text-size-adjust: none;
   forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 0;
   /* WebKit(WKWebView=アプリ窓)では既定 auto だと透明spanを選択できない。
      明示 text で選択可能に（祖先の none も上書きできる）。Chromeは無害。 */
   -webkit-user-select: text;
@@ -89,8 +97,98 @@ button:hover { background: #f0f0f3; }
   -webkit-user-select: text;
   user-select: text;
 }
-.textLayer span.markedContent { top: 0; height: 0; }
+.textLayer span.markedContent { top: 0 !important; height: 0 !important; }
 .textLayer ::selection { background: rgba(76, 141, 255, .35); }
+
+/* ---- bookmark markers (ページ左外に貼り付くタブ) ---- */
+#bookmarkBtn { white-space: nowrap; }
+.bookmark-marker {
+  position: absolute;
+  left: -22px;
+  width: 22px;
+  height: 20px;
+  margin-top: -10px; /* top に y% を指定するので中央揃え */
+  background: #1c6dff;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  border-radius: 4px 0 0 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  cursor: pointer;
+  user-select: none;
+  z-index: 2;
+}
+.bookmark-marker::after {
+  /* ページ左端からツメを伸ばす */
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: 0;
+  border: 10px solid transparent;
+  border-left-color: #1c6dff;
+  border-right-width: 0;
+}
+.bookmark-marker:hover { background: #0b59e6; }
+.bookmark-marker:hover::after { border-left-color: #0b59e6; }
+.bookmark-marker.flash {
+  animation: bookmark-flash 1.2s ease-out;
+}
+@keyframes bookmark-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(28,109,255,.7); transform: scale(1.25); }
+  60%  { box-shadow: 0 0 0 14px rgba(28,109,255,0); transform: scale(1); }
+  100% { box-shadow: 0 1px 3px rgba(0,0,0,.25); transform: scale(1); }
+}
+
+/* ---- find bar (⌘F ページ内検索) ---- */
+#findBar {
+  position: fixed;
+  top: 60px;
+  right: 24px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #c5c5ca;
+  border-radius: 9px;
+  padding: 6px 8px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.15);
+}
+#findBar[hidden] { display: none; }
+#findInput {
+  font: inherit;
+  font-size: 13px;
+  width: 220px;
+  padding: 5px 9px;
+  border: 1px solid #d8d8dd;
+  border-radius: 6px;
+}
+#findInput:focus { outline: 2px solid #1c6dff; outline-offset: -1px; }
+#findCount {
+  font-size: 12px;
+  min-width: 52px;
+  text-align: center;
+}
+#findBar button {
+  padding: 3px 8px;
+  font-size: 13px;
+  line-height: 1;
+}
+#findClose { font-size: 15px; }
+
+/* テキストレイヤーは color: transparent。マーク自身も透明にして
+   背景の蛍光ペンだけを見せる（選択動作は保持される）。 */
+.textLayer mark.search-hit {
+  background: rgba(255, 222, 0, 0.45);
+  color: transparent;
+  padding: 0;
+  border-radius: 2px;
+}
+.textLayer mark.search-hit.current {
+  background: rgba(255, 120, 0, 0.75);
+}
 
 /* ---- floating button ---- */
 #explainFab {
@@ -170,8 +268,63 @@ button.danger:hover { background: #fdecea; }
 #memoHead button { padding: 4px 10px; font-size: 12.5px; }
 #memoHead #memoClose { padding: 2px 9px; font-size: 15px; line-height: 1; }
 
+/* ---- memo / summary タブ ---- */
+#memoTabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px 0;
+  border-bottom: 1px solid #ececef;
+  flex: none;
+}
+.memoTab {
+  padding: 6px 14px;
+  font-size: 12.5px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+  background: transparent;
+  color: #666;
+  margin-bottom: -1px;
+}
+.memoTab:hover { background: #f2f2f5; }
+.memoTab.active {
+  background: #fff;
+  color: #1c6dff;
+  font-weight: 600;
+  border-color: #ececef;
+}
+
 .memoView { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; }
 #memoEdit { display: flex; flex-direction: column; gap: 8px; }
+#memoMemoView { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+#memoSummaryView { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+/* display:flex が [hidden] を打ち消すため、非表示を明示的に勝たせる */
+#memoMemoView[hidden], #memoSummaryView[hidden] { display: none; }
+.summaryHint { font-size: 12px; color: #9a9a9e; margin: -2px 0 2px; }
+.summaryField { display: flex; flex-direction: column; gap: 4px; }
+.summaryField > label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+.summaryField textarea {
+  resize: vertical;
+  min-height: 56px;
+  font: 13.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 8px 10px;
+  border: 1px solid #d8d8dd;
+  border-radius: 7px;
+}
+.summaryField textarea:disabled { background: #f6f6f8; color: #9a9a9e; }
+.summaryField .fieldPreview {
+  font-size: 13.5px;
+  line-height: 1.7;
+  padding: 4px 2px;
+  border-left: 2px solid #ececef;
+  padding-left: 10px;
+}
+.summaryField .fieldPreview:empty::before { content: "（未記入）"; color: #bcbcc2; }
 #memoTitle {
   font: inherit;
   font-size: 14px;

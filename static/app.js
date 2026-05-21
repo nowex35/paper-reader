@@ -119,6 +119,14 @@ async function renderPageNode(page, scale, dpr) {
     container: textLayer,
     viewport,
   }).promise;
+  // WebKit(WKWebView)では `font-size: calc(var(--scale-factor) * Npx)` の解決が
+  // 不安定で、span の文字幅が canvas グリフとズレる→選択した文字と src に
+  // 入る文字が食い違う事故が起きる。レンダ直後に固定 px へ書き戻して回避。
+  const calcRe = /^calc\(\s*var\(--scale-factor\)\s*\*\s*([\d.]+)px\s*\)$/;
+  for (const el of textLayer.querySelectorAll("span, br")) {
+    const m = el.style.fontSize && el.style.fontSize.match(calcRe);
+    if (m) el.style.fontSize = scale * parseFloat(m[1]) + "px";
+  }
   wrap._pageText = tc.items.map((i) => i.str).join(" ");
   return wrap;
 }
@@ -157,6 +165,7 @@ async function openPdfBuffer(buf, name, id) {
   els.status.textContent = "読み込み中…";
   els.container.innerHTML = "";
   Memo.openForPdf(id, name);
+  Bookmarks.load(id);
   pdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
   zoom = 1;
   live = 1;
@@ -164,6 +173,8 @@ async function openPdfBuffer(buf, name, id) {
   localStorage.setItem("lastPdfId", id);
   localStorage.setItem("lastPdfName", name);
   await renderAll();
+  Bookmarks.renderMarkers();
+  Finder.refresh(); // 検索バーが開いていたら再ハイライト
 }
 
 // PDF 本体をローカル（自Mac内のサーバ）にキャッシュ。失敗しても描画は継続。
@@ -263,6 +274,8 @@ async function commitZoom() {
   els.status.textContent =
     `${pdfDoc.numPages} ページ` +
     (zoom !== 1 ? ` · ${Math.round(zoom * 100)}%` : "");
+  Bookmarks.renderMarkers(); // 再描画でマーカーDOMも消えるので貼り直し
+  Finder.refresh(); // ハイライトも貼り直し
 }
 
 els.pdfPane.addEventListener(
@@ -291,16 +304,33 @@ document.addEventListener("keydown", (e) => {
 });
 
 /* ---------- 選択検知 ---------- */
+// 数式の斜体（𝑄 等の BMP 外文字）は UTF-16 サロゲートペアで表現される。
+// 単純な substring/slice が片割れだけ残すと、サーバ側で UTF-8 エンコードに
+// 失敗する（surrogates not allowed）ため、孤立サロゲートを除いて返す。
+function sanitize(s) {
+  return (s || "").replace(
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+    ""
+  );
+}
+function safeSlice(s, n) {
+  if (!s) return "";
+  let cut = Math.min(n, s.length);
+  const c = s.charCodeAt(cut - 1);
+  if (cut < s.length && c >= 0xD800 && c <= 0xDBFF) cut--; // 高サロゲートで終わるなら一つ戻す
+  return sanitize(s.slice(0, cut));
+}
+
 function currentSelection() {
   const sel = window.getSelection();
-  const text = sel ? sel.toString().trim() : "";
+  const text = sanitize(sel ? sel.toString().trim() : "");
   if (!text || sel.rangeCount === 0) return null;
   const node = sel.anchorNode;
   const elNode = node && (node.nodeType === 1 ? node : node.parentElement);
   const wrap = elNode && elNode.closest(".pageWrap");
   if (!wrap) return null;
   const rect = sel.getRangeAt(0).getBoundingClientRect();
-  return { text, rect, context: (wrap._pageText || "").slice(0, 1600) };
+  return { text, rect, context: safeSlice(wrap._pageText, 1600) };
 }
 
 document.addEventListener("mouseup", () => {
@@ -402,6 +432,385 @@ document.addEventListener("mouseup", () => {
   document.body.style.userSelect = "";
 });
 
+/* ---------- ブックマーク（任意の行に印をつけて行き来する） ---------- */
+// 位置は { pageIndex, y(0..1) } で持つので、ズームしても倍率に追従する。
+// PDF ごとに localStorage に保存（ローカル完結。PDFキャッシュと同じ思想）。
+const Bookmarks = (() => {
+  const KEY = (id) => `bookmarks_${id}`;
+  const NEAR = 0.02; // 同位置とみなす許容（ページ高比）
+  const btn = document.getElementById("bookmarkBtn");
+  let pdfId = null;
+  let items = [];
+
+  const cmp = (a, b) => a.pageIndex - b.pageIndex || a.y - b.y;
+
+  function load(id) {
+    pdfId = id;
+    try {
+      items = JSON.parse(localStorage.getItem(KEY(id)) || "[]");
+    } catch {
+      items = [];
+    }
+    items.sort(cmp);
+    updateBadge();
+  }
+  function persist() {
+    if (pdfId) localStorage.setItem(KEY(pdfId), JSON.stringify(items));
+  }
+  function updateBadge() {
+    if (btn) btn.textContent = `🔖 ${items.length}`;
+  }
+  function flash(msg) {
+    els.status.textContent = msg;
+  }
+
+  function pages() {
+    return els.container.querySelectorAll(".pageWrap");
+  }
+
+  function renderMarkers() {
+    document.querySelectorAll(".bookmark-marker").forEach((el) => el.remove());
+    const ps = pages();
+    items.forEach((b, idx) => {
+      const wrap = ps[b.pageIndex];
+      if (!wrap) return;
+      const m = document.createElement("div");
+      m.className = "bookmark-marker";
+      m.title = `#${idx + 1} クリックでジャンプ / Shift+クリックで削除`;
+      m.style.top = b.y * 100 + "%";
+      m.textContent = String(idx + 1);
+      m.addEventListener("mousedown", (e) => e.stopPropagation()); // 選択開始を防ぐ
+      m.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (e.shiftKey) remove(idx);
+        else jumpTo(idx);
+      });
+      wrap.appendChild(m);
+    });
+    updateBadge();
+  }
+
+  // 現在位置を { pageIndex, y } で返す（選択範囲があればその中央、なければビューポート上1/4）
+  function currentLocation() {
+    const ps = pages();
+    if (!ps.length) return null;
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && sel.toString().trim()) {
+      const node = sel.anchorNode;
+      const elNode = node && (node.nodeType === 1 ? node : node.parentElement);
+      const wrap = elNode && elNode.closest(".pageWrap");
+      if (wrap) {
+        const r = sel.getRangeAt(0).getBoundingClientRect();
+        const wr = wrap.getBoundingClientRect();
+        return {
+          pageIndex: [...ps].indexOf(wrap),
+          y: Math.max(0, Math.min(1, (r.top + r.height / 2 - wr.top) / wr.height)),
+        };
+      }
+    }
+    const paneRect = els.pdfPane.getBoundingClientRect();
+    const targetY = paneRect.top + paneRect.height * 0.25; // 「いま読んでる行」の感覚に近い位置
+    for (let i = 0; i < ps.length; i++) {
+      const r = ps[i].getBoundingClientRect();
+      if (r.top <= targetY && r.bottom >= targetY) {
+        return {
+          pageIndex: i,
+          y: Math.max(0, Math.min(1, (targetY - r.top) / r.height)),
+        };
+      }
+    }
+    // 全ページが上 or 下: 最も近いページの端に
+    let best = 0;
+    let bestDist = Infinity;
+    ps.forEach((p, i) => {
+      const r = p.getBoundingClientRect();
+      const d = Math.min(Math.abs(r.top - targetY), Math.abs(r.bottom - targetY));
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    });
+    const r = ps[best].getBoundingClientRect();
+    return { pageIndex: best, y: r.top > targetY ? 0 : 1 };
+  }
+
+  function toggle() {
+    if (!pdfDoc) {
+      flash("PDFを開いてからブックマークできます");
+      return;
+    }
+    const loc = currentLocation();
+    if (!loc) return;
+    const i = items.findIndex(
+      (b) => b.pageIndex === loc.pageIndex && Math.abs(b.y - loc.y) < NEAR
+    );
+    if (i >= 0) {
+      items.splice(i, 1);
+      flash(`ブックマーク削除（残り ${items.length}）`);
+    } else {
+      items.push({ ...loc, t: Date.now() });
+      items.sort(cmp);
+      flash(`ブックマーク追加（合計 ${items.length}）`);
+    }
+    persist();
+    renderMarkers();
+  }
+
+  function remove(idx) {
+    items.splice(idx, 1);
+    persist();
+    renderMarkers();
+    flash(`ブックマーク削除（残り ${items.length}）`);
+  }
+
+  function clear() {
+    if (!items.length) return;
+    if (!confirm(`ブックマーク ${items.length} 件を全て削除しますか？`)) return;
+    items = [];
+    persist();
+    renderMarkers();
+    flash("ブックマークを全削除");
+  }
+
+  function jumpTo(idx) {
+    const b = items[idx];
+    if (!b) return;
+    const wrap = pages()[b.pageIndex];
+    if (!wrap) return;
+    const wr = wrap.getBoundingClientRect();
+    const pr = els.pdfPane.getBoundingClientRect();
+    const delta = wr.top - pr.top + wr.height * b.y - pr.height * 0.25;
+    els.pdfPane.scrollTop += delta;
+    // ジャンプ先のマーカーを一瞬光らせる（renderMarkers後でも生きるよう DOM 再取得）
+    requestAnimationFrame(() => {
+      document
+        .querySelectorAll(".bookmark-marker.flash")
+        .forEach((el) => el.classList.remove("flash"));
+      const m = document.querySelectorAll(".bookmark-marker")[idx];
+      if (m) {
+        m.classList.add("flash");
+        setTimeout(() => m.classList.remove("flash"), 1200);
+      }
+    });
+    flash(`ブックマーク #${idx + 1} / ${items.length}`);
+  }
+
+  function next() {
+    if (!items.length) return flash("ブックマークはまだありません（⌘B で追加）");
+    const loc = currentLocation();
+    let i = items.findIndex(
+      (b) =>
+        b.pageIndex > loc.pageIndex ||
+        (b.pageIndex === loc.pageIndex && b.y > loc.y + 0.005)
+    );
+    if (i < 0) i = 0; // 末尾を超えたら巡回
+    jumpTo(i);
+  }
+
+  function prev() {
+    if (!items.length) return flash("ブックマークはまだありません（⌘B で追加）");
+    const loc = currentLocation();
+    let i = -1;
+    for (let k = items.length - 1; k >= 0; k--) {
+      const b = items[k];
+      if (
+        b.pageIndex < loc.pageIndex ||
+        (b.pageIndex === loc.pageIndex && b.y < loc.y - 0.005)
+      ) {
+        i = k;
+        break;
+      }
+    }
+    if (i < 0) i = items.length - 1;
+    jumpTo(i);
+  }
+
+  // ボタン: クリックでトグル、Shift+クリックで全削除
+  if (btn) {
+    btn.addEventListener("click", (e) => {
+      if (e.shiftKey) clear();
+      else toggle();
+    });
+  }
+
+  // ショートカット。入力欄にフォーカス中は誤爆を避ける。
+  function isEditing(t) {
+    return (
+      t &&
+      (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)
+    );
+  }
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "b") {
+      if (isEditing(e.target)) return;
+      e.preventDefault();
+      toggle();
+    } else if (e.key === "F2") {
+      if (isEditing(e.target)) return;
+      e.preventDefault();
+      if (e.shiftKey) prev();
+      else next();
+    }
+  });
+
+  updateBadge();
+  return { load, renderMarkers, toggle, next, prev, clear };
+})();
+
+/* ---------- ページ内検索（⌘F） ---------- */
+// pdf.js の textLayer span にインラインで <mark> を埋め込む方式。
+// span のレイアウト位置は変えないので選択動作と表示は保たれる。
+const Finder = (() => {
+  const bar = document.getElementById("findBar");
+  const input = document.getElementById("findInput");
+  const countEl = document.getElementById("findCount");
+  const prevBtn = document.getElementById("findPrev");
+  const nextBtn = document.getElementById("findNext");
+  const closeBtn = document.getElementById("findClose");
+  if (!bar || !input) return { open() {}, close() {}, refresh() {} };
+
+  let hits = []; // [mark, ...]
+  let cur = -1;
+
+  function isOpen() {
+    return !bar.hidden;
+  }
+  function open() {
+    bar.hidden = false;
+    input.focus();
+    input.select();
+    if (input.value) search(input.value);
+  }
+  function close() {
+    bar.hidden = true;
+    clearHits();
+    cur = -1;
+    countEl.textContent = "0 / 0";
+  }
+  function clearHits() {
+    // <mark> を外して textNode を span 直下に戻す
+    document
+      .querySelectorAll(".pageWrap .textLayer mark.search-hit")
+      .forEach((m) => {
+        const p = m.parentNode;
+        if (!p) return;
+        while (m.firstChild) p.insertBefore(m.firstChild, m);
+        p.removeChild(m);
+        p.normalize();
+      });
+    hits = [];
+  }
+  function search(q) {
+    clearHits();
+    cur = -1;
+    if (!q || !pdfDoc) {
+      countEl.textContent = "0 / 0";
+      return;
+    }
+    const needle = q.toLowerCase();
+    const pages = els.container.querySelectorAll(".pageWrap");
+    pages.forEach((wrap) => {
+      const tl = wrap.querySelector(".textLayer");
+      if (!tl) return;
+      tl.querySelectorAll("span").forEach((span) => {
+        const text = span.textContent;
+        if (!text) return;
+        const lo = text.toLowerCase();
+        const ranges = [];
+        let pos = 0;
+        for (;;) {
+          const i = lo.indexOf(needle, pos);
+          if (i < 0) break;
+          ranges.push([i, i + needle.length]);
+          pos = i + needle.length;
+        }
+        if (!ranges.length) return;
+        // 子要素が複雑な span は扱わない（pdf.js は通常 1 textNode）
+        if (span.children.length) return;
+        const frag = document.createDocumentFragment();
+        let last = 0;
+        for (const [a, b] of ranges) {
+          if (a > last) frag.appendChild(document.createTextNode(text.slice(last, a)));
+          const m = document.createElement("mark");
+          m.className = "search-hit";
+          m.textContent = text.slice(a, b);
+          frag.appendChild(m);
+          hits.push(m);
+          last = b;
+        }
+        if (last < text.length)
+          frag.appendChild(document.createTextNode(text.slice(last)));
+        span.textContent = "";
+        span.appendChild(frag);
+      });
+    });
+    if (hits.length) {
+      cur = 0;
+      focusCurrent(true);
+    } else {
+      countEl.textContent = "0 / 0";
+    }
+  }
+  function focusCurrent(scroll) {
+    hits.forEach((m, i) => m.classList.toggle("current", i === cur));
+    countEl.textContent = hits.length ? `${cur + 1} / ${hits.length}` : "0 / 0";
+    if (scroll && cur >= 0) {
+      const r = hits[cur].getBoundingClientRect();
+      const pr = els.pdfPane.getBoundingClientRect();
+      const delta = r.top - pr.top + r.height / 2 - pr.height / 3;
+      els.pdfPane.scrollTop += delta;
+    }
+  }
+  function next() {
+    if (!hits.length) return;
+    cur = (cur + 1) % hits.length;
+    focusCurrent(true);
+  }
+  function prev() {
+    if (!hits.length) return;
+    cur = (cur - 1 + hits.length) % hits.length;
+    focusCurrent(true);
+  }
+  // PDF差替・ズーム後に呼ぶ: 開いていれば再ハイライト
+  function refresh() {
+    if (isOpen() && input.value) {
+      // hits は古い DOM を参照しているので捨てて再走査。
+      hits = [];
+      search(input.value);
+    }
+  }
+
+  // 入力中の検索は軽くデバウンス（大きなPDFで全span走査するため）
+  let debounce = null;
+  input.addEventListener("input", () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => search(input.value), 100);
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (e.shiftKey) prev();
+      else next();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    }
+  });
+  prevBtn.onclick = prev;
+  nextBtn.onclick = next;
+  closeBtn.onclick = close;
+
+  // ⌘F / Ctrl+F でオープン（テキストエリア中でもPDF検索を優先）
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      open();
+    }
+  });
+
+  return { open, close, refresh };
+})();
+
 /* ---------- メモ（論文ごとの自分用まとめ） ---------- */
 async function sha256Id(buf) {
   const h = await crypto.subtle.digest("SHA-256", buf);
@@ -420,12 +829,47 @@ const Memo = (() => {
   const previewEl = $("memoPreview");
   const previewBtn = $("memoPreviewBtn");
   const statusEl = $("memoStatus");
+  const labelEl = document.querySelector("#memoHead .memoLabel");
+  const tabsEl = $("memoTabs");
+  const memoView = $("memoMemoView");
+  const summaryView = $("memoSummaryView");
 
   // DOM が古い（キャッシュ食い違い等）場合でも本体を巻き込まない
-  if (!panel || !toggle || !titleEl || !bodyEl) {
+  if (!panel || !toggle || !titleEl || !bodyEl || !summaryView) {
     console.warn("[memo] UI要素が見つからないためメモ機能を無効化（ハードリロード推奨）");
     return { openForPdf() {}, openExisting() {}, setOpen() {} };
   }
+
+  // 落合フォーマット6項目。key はサーバの SUMMARY_KEYS と一致させること。
+  // 出典: 落合陽一「先端技術とメディア表現1 #FTMA15」(本ツールの考案ではない)
+  // https://www.slideshare.net/Ochyai/1-ftma15
+  const SUMMARY_FIELDS = [
+    ["what", "① どんなもの？", "この研究を一言で。何を達成したか。"],
+    ["prior", "② 先行研究と比べてどこがすごい？", "既存手法・従来研究との違い／優位点。"],
+    ["method", "③ 技術や手法のキモはどこ？", "提案手法の核となるアイデア・仕組み。"],
+    ["verify", "④ どうやって有効だと検証した？", "実験・データセット・評価指標と結果。"],
+    ["discuss", "⑤ 議論はある？", "限界・課題・著者や自分が感じた論点。"],
+    ["next", "⑥ 次に読むべき論文は？", "関連文献・次に読む対象。"],
+  ];
+
+  // summary タブの「質問 → メモ欄」ブロックを生成（key -> {ta, pv}）
+  const sumFields = {};
+  for (const [key, q, ph] of SUMMARY_FIELDS) {
+    const block = document.createElement("div");
+    block.className = "summaryField";
+    const label = document.createElement("label");
+    label.textContent = q;
+    const ta = document.createElement("textarea");
+    ta.placeholder = ph;
+    ta.dataset.key = key;
+    const pv = document.createElement("div");
+    pv.className = "fieldPreview";
+    pv.hidden = true;
+    block.append(label, ta, pv);
+    summaryView.appendChild(block);
+    sumFields[key] = { ta, pv };
+  }
+  const eachSum = (fn) => SUMMARY_FIELDS.forEach(([k]) => fn(k, sumFields[k]));
 
   const emit = (name, detail) =>
     document.dispatchEvent(new CustomEvent(name, { detail }));
@@ -434,6 +878,7 @@ const Memo = (() => {
   let dirty = false;
   let saveTimer = null;
   let preview = false;
+  let tab = "memo"; // "memo" | "summary"
 
   const stripExt = (n) => (n || "").replace(/\.pdf$/i, "");
   function fmtDate(iso) {
@@ -452,13 +897,24 @@ const Memo = (() => {
   const setStatus = (t) => (statusEl.textContent = t);
   function setEditable(on) {
     titleEl.disabled = bodyEl.disabled = !on;
+    eachSum((_, f) => (f.ta.disabled = !on));
     $("memoSaveBtn").disabled = $("memoDeleteBtn").disabled = !on;
+  }
+  const collectSummary = () => {
+    const o = {};
+    eachSum((k, f) => (o[k] = f.ta.value));
+    return o;
+  };
+  function fillSummary(s) {
+    s = s || {};
+    eachSum((k, f) => (f.ta.value = s[k] || ""));
   }
 
   function load(note) {
     cur = { id: note.id, title: note.title || "", pdf: note.pdf || "" };
     titleEl.value = cur.title;
     bodyEl.value = note.body || "";
+    fillSummary(note.summary);
     dirty = false;
     setEditable(true);
     if (preview) renderPreview();
@@ -469,6 +925,7 @@ const Memo = (() => {
     cur = { id, title: stripExt(pdfName), pdf: pdfName };
     titleEl.value = cur.title;
     bodyEl.value = "";
+    fillSummary(null);
     dirty = false;
     setEditable(true);
     if (preview) renderPreview();
@@ -513,6 +970,7 @@ const Memo = (() => {
           title: titleEl.value.trim() || "Untitled",
           body: bodyEl.value,
           pdf: cur.pdf || null,
+          summary: collectSummary(),
         }),
       });
       if (!r.ok) throw new Error("HTTP " + r.status);
@@ -530,19 +988,41 @@ const Memo = (() => {
     previewEl.innerHTML = marked.parse(
       bodyEl.value || "_（まだ何も書かれていません）_"
     );
+    eachSum((_, f) => {
+      f.pv.innerHTML = f.ta.value.trim() ? marked.parse(f.ta.value) : "";
+    });
   }
   function setPreview(on) {
     preview = on;
     bodyEl.hidden = on;
     previewEl.hidden = !on;
+    eachSum((_, f) => {
+      f.ta.hidden = on;
+      f.pv.hidden = !on;
+    });
     previewBtn.textContent = on ? "編集に戻る" : "プレビュー";
     if (on) renderPreview();
+  }
+  function setTab(name) {
+    tab = name === "summary" ? "summary" : "memo";
+    memoView.hidden = tab !== "memo";
+    summaryView.hidden = tab !== "summary";
+    tabsEl.querySelectorAll(".memoTab").forEach((b) =>
+      b.classList.toggle("active", b.dataset.tab === tab)
+    );
+    if (labelEl)
+      labelEl.textContent = tab === "summary" ? "🧩 落合まとめ" : "📝 このメモ";
+    localStorage.setItem("memoTab", tab);
   }
 
   toggle.onclick = () => setOpen(!panel.classList.contains("open"));
   $("memoClose").onclick = () => setOpen(false);
+  tabsEl.querySelectorAll(".memoTab").forEach((b) => {
+    b.onclick = () => setTab(b.dataset.tab);
+  });
   titleEl.addEventListener("input", markDirty);
   bodyEl.addEventListener("input", markDirty);
+  eachSum((_, f) => f.ta.addEventListener("input", markDirty));
   $("memoSaveBtn").onclick = save;
   previewBtn.onclick = () => setPreview(!preview);
   $("memoDeleteBtn").onclick = async () => {
@@ -550,6 +1030,7 @@ const Memo = (() => {
     await fetch("/api/notes/" + cur.id, { method: "DELETE" });
     cur = null;
     titleEl.value = bodyEl.value = "";
+    fillSummary(null);
     setEditable(false);
     setStatus("削除しました");
     emit("memos-changed");
@@ -589,6 +1070,7 @@ const Memo = (() => {
   const savedH = localStorage.getItem("memoH");
   if (savedH) panel.style.setProperty("--memo-h", savedH);
   setEditable(false);
+  setTab(localStorage.getItem("memoTab") || "memo");
   if (localStorage.getItem("memoOpen") === "1") setOpen(true);
 
   return { openForPdf, openExisting, setOpen };
