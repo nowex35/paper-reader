@@ -30,11 +30,30 @@ button {
   cursor: pointer;
 }
 button:hover { background: #f0f0f3; }
+#modelSelect {
+  font: inherit;
+  font-size: 13px;
+  max-width: 200px;
+  padding: 5px 8px;
+  border: 1px solid #c5c5ca;
+  background: #fff;
+  border-radius: 7px;
+  cursor: pointer;
+  color: #3a3a3e;
+}
 
 /* ---- layout ---- */
 #main { flex: 1; display: flex; min-height: 0; }
 #pdfPane { flex: 1; overflow: auto; min-width: 280px; }
-#sidePane { width: 420px; flex: none; overflow: auto; background: #fff; border-left: 1px solid #dadade; }
+#sidePane {
+  width: 420px;
+  flex: none;
+  background: #fff;
+  border-left: 1px solid #dadade;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 #resizer { width: 6px; cursor: col-resize; background: #e3e3e7; flex: none; }
 #resizer:hover { background: #b9b9c0; }
 
@@ -82,23 +101,28 @@ button:hover { background: #f0f0f3; }
   transform-origin: 0 0;
   caret-color: CanvasText;
   z-index: 0;
-  /* WebKit(WKWebView=アプリ窓)では既定 auto だと透明spanを選択できない。
-     明示 text で選択可能に（祖先の none も上書きできる）。Chromeは無害。 */
-  -webkit-user-select: text;
-  user-select: text;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .textLayer span,
 .textLayer br {
   color: transparent;
   position: absolute;
   white-space: pre;
-  cursor: text;
   transform-origin: 0% 0%;
-  -webkit-user-select: text;
-  user-select: text;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .textLayer span.markedContent { top: 0 !important; height: 0 !important; }
-.textLayer ::selection { background: rgba(76, 141, 255, .35); }
+.select-hit {
+  position: absolute;
+  z-index: 1;
+  background: rgba(76, 141, 255, .28);
+  border-radius: 2px;
+  pointer-events: none;
+}
 
 /* ---- bookmark markers (ページ左外に貼り付くタブ) ---- */
 #bookmarkBtn { white-space: nowrap; }
@@ -205,8 +229,8 @@ button:hover { background: #f0f0f3; }
 #explainFab:hover { background: #0b59e6; }
 
 /* ---- results ---- */
-#results { padding: 14px; }
-#results .empty { color: #9a9a9e; font-size: 14px; padding: 30px 6px; text-align: center; }
+#results { flex: 1; overflow: auto; padding: 14px; }
+#results .empty { color: #9a9a9e; font-size: 14px; padding: 30px 6px; text-align: center; line-height: 1.7; }
 .card {
   border: 1px solid #e3e3e7;
   border-radius: 10px;
@@ -237,6 +261,65 @@ button:hover { background: #f0f0f3; }
 }
 .card .toolbar button { padding: 4px 10px; font-size: 12px; }
 .card.loading .body::after { content: " ▍"; color: #1c6dff; }
+
+/* 質問カード(Gemini): 翻訳カードと見分けるため青系アクセント。src は質問文なので
+   等幅ではなく本文フォントで読みやすく。 */
+.card.ask { border-color: #cdd9f5; }
+.card.ask .src {
+  background: #eef3ff;
+  color: #2a4d8f;
+  font-family: inherit;
+  font-size: 13px;
+  border-bottom-color: #dbe4f7;
+}
+
+/* ---- 質問欄（sidePane 下部に常設） ---- */
+#askForm {
+  flex: none;
+  border-top: 1px solid #ececef;
+  background: #fafafb;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#askQuote {
+  font-size: 12px;
+  color: #2a4d8f;
+  background: #eef3ff;
+  border-left: 3px solid #1c6dff;
+  border-radius: 0 6px 6px 0;
+  padding: 5px 8px;
+  max-height: 60px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+#askQuote[hidden] { display: none; }
+#askRow { display: flex; gap: 8px; align-items: flex-end; }
+#askInput {
+  flex: 1;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  border: 1px solid #d8d8dd;
+  border-radius: 8px;
+  resize: none;
+  max-height: 160px;
+  overflow-y: auto;
+}
+#askInput:focus { outline: 2px solid #1c6dff; outline-offset: -1px; }
+#askSend {
+  flex: none;
+  background: #1c6dff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+}
+#askSend:hover { background: #0b59e6; }
+#askSend:disabled { background: #b9c8e6; cursor: default; }
+#askMeta { font-size: 11.5px; }
 
 /* ---- memo panel (下部トグル) ---- */
 #memoToggle.active { background: #1c6dff; color: #fff; border-color: #1c6dff; }

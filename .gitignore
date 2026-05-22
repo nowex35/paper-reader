@@ -7,6 +7,7 @@ __pycache__/
 pdfs/
 *.app/
 .app.log
+.settings.json
 
 # ユーザーの個人メモ（論文ごとのまとめ）はリポジトリに含めない
 notes/*.md

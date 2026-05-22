@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/style.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 </head>
 <body>
   <header id="topbar">
@@ -17,6 +18,7 @@
     <button id="bookmarkBtn" title="ブックマーク追加/削除 ⌘B　次へ F2　前へ Shift+F2　Shift+クリックで一覧">🔖 0</button>
     <button id="memoToggle" title="メモパネルの開閉">📝 メモ</button>
     <span class="spacer"></span>
+    <select id="modelSelect" title="解説に使うローカルLLMモデル" hidden></select>
     <span id="status" class="muted"></span>
   </header>
 
@@ -47,8 +49,16 @@
     <div id="resizer"></div>
     <div id="sidePane">
       <div id="results">
-        <div class="empty">選択した箇所の日本語訳と解説がここに出ます。</div>
+        <div class="empty">テキストを選択 → その場で日本語訳＋解説（ローカル）。<br />下の欄から論文の内容を質問（Gemini・論文全文を踏まえて回答）。</div>
       </div>
+      <form id="askForm">
+        <div id="askQuote" hidden></div>
+        <div id="askRow">
+          <textarea id="askInput" rows="1" placeholder="この論文について質問（⌘/Ctrl+Enter で送信）。選択中なら引用付き。"></textarea>
+          <button type="submit" id="askSend" title="Gemini に質問">質問</button>
+        </div>
+        <div id="askMeta" class="muted"></div>
+      </form>
     </div>
   </div>
 

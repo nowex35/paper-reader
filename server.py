@@ -6,11 +6,21 @@
 import json
 import os
 import re
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
+
+# 内容についての質問は Gemini（クラウド）に投げる。翻訳だけで使うなら未導入で
+# よいので、import 失敗は握りつぶし、質問機能のみ無効化する（翻訳は壊さない）。
+try:
+    from google import genai
+    from google.genai import types as genai_types
+except ImportError:  # noqa: BLE001
+    genai = None
+    genai_types = None
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,7 +32,49 @@ load_dotenv(Path(__file__).parent / ".env")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:4b-instruct").strip()
 
+# 内容についての「質問」は賢いクラウドLLM（Gemini）に投げる。翻訳=ローカル(Ollama)、
+# 質問=Gemini という役割分担。質問機能を使うときだけ GEMINI_API_KEY を設定すればよく、
+# 未設定なら質問欄はセットアップ案内を返すだけ（翻訳は従来どおり無料・オフライン）。
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite").strip()
+
 BASE_DIR = Path(__file__).parent
+
+# 選択中モデルは実行中に /api/model で切替でき、再起動後も保つよう小さな
+# 設定ファイルに残す（ローカル完結・localhost のみ）。未設定なら環境変数が既定。
+SETTINGS_FILE = BASE_DIR / ".settings.json"
+
+
+def _load_model() -> str:
+    try:
+        m = json.loads(SETTINGS_FILE.read_text(encoding="utf-8")).get("model", "")
+        return (m or "").strip() or OLLAMA_MODEL
+    except Exception:  # noqa: BLE001
+        return OLLAMA_MODEL
+
+
+def _save_model(m: str) -> None:
+    try:
+        SETTINGS_FILE.write_text(json.dumps({"model": m}), encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _unload_model(name: str) -> None:
+    """Ollama のメモリから指定モデルを即時アンロードする。Ollama は使用後も
+    既定で5分間モデルを載せたままにするため、切替時に旧モデルを残すと 8B 等で
+    二重に載りメモリを圧迫する。keep_alive=0 の空リクエストで即解放する。"""
+    if not name:
+        return
+    try:
+        httpx.post(f"{OLLAMA_HOST}/api/generate",
+                   json={"model": name, "keep_alive": 0}, timeout=5.0)
+    except Exception:  # noqa: BLE001
+        pass  # 解放は best-effort（落ちても切替自体は成功させる）
+
+
+# 実行中に書き換わる「いま使うモデル」。OLLAMA_MODEL は初期値・既定値の役目。
+CURRENT_MODEL = _load_model()
 STATIC_DIR = BASE_DIR / "static"
 NOTES_DIR = BASE_DIR / "notes"
 NOTES_DIR.mkdir(exist_ok=True)
@@ -67,23 +119,27 @@ def ollama_status() -> dict:
         models = [m.get("name", "") for m in r.json().get("models", [])]
     except Exception:  # noqa: BLE001
         return {"running": False, "model_present": False,
-                "model": OLLAMA_MODEL, "models": []}
-    base = OLLAMA_MODEL.split(":")[0]
-    present = OLLAMA_MODEL in models or any(
-        m == OLLAMA_MODEL or m.split(":")[0] == base for m in models
+                "model": CURRENT_MODEL, "models": []}
+    base = CURRENT_MODEL.split(":")[0]
+    present = CURRENT_MODEL in models or any(
+        m == CURRENT_MODEL or m.split(":")[0] == base for m in models
     )
     return {"running": True, "model_present": present,
-            "model": OLLAMA_MODEL, "models": models}
+            "model": CURRENT_MODEL, "models": models}
 
 
 def stream_ollama(text: str, context: str | None):
     payload = {
-        "model": OLLAMA_MODEL,
+        "model": CURRENT_MODEL,
         "messages": [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
             {"role": "user", "content": build_prompt(text, context)},
         ],
         "stream": True,
+        # qwen3.5 等のハイブリッド推論モデルは既定で回答前に思考トークンを長く
+        # 出すため最初の出力が遅い。翻訳・用語解説に思考は不要なので明示的に切る
+        # （非推論モデル=qwen3:*-instruct 等では無視される）。
+        "think": False,
         "options": {"temperature": 0.3},
     }
     timeout = httpx.Timeout(600.0, connect=5.0)
@@ -102,6 +158,87 @@ def stream_ollama(text: str, context: str | None):
                     yield piece
                 if obj.get("done"):
                     break
+
+
+# ---------- 内容についての質問（Gemini・論文全文を文脈に持つ） ----------
+
+ASK_SYSTEM_INSTRUCTION = """あなたは英語の学術論文を読む日本人研究者を支える、優秀な研究アシスタントです。
+ユーザーがいま読んでいる論文の全文が、この指示の後ろに添付されています。これを踏まえ、
+論文の文脈に即してユーザーの質問に日本語で詳しく・正確に答えてください。
+
+- 論文中に根拠がある場合は、その箇所（節・図表・式番号など）に触れて答える。
+- 論文に書かれていないことを述べるときは、推測・一般知識であると明示する。
+- 数式・専門用語は必要に応じて噛み砕く。冗長な前置きは省く。
+- Markdown で構造化して答える。
+"""
+
+GEMINI_SETUP_GUIDE = f"""> ⚠️ **質問機能（Gemini）が未設定です**
+>
+> 内容についての質問は、賢いクラウドLLM（Google Gemini / 既定 {GEMINI_MODEL}）で答えます。
+> 翻訳・解説は従来どおりローカル（Ollama）のままで、ここは課金されません。
+>
+> 1. `pip install google-genai`
+> 2. `.env` に `GEMINI_API_KEY=...` を設定（取得: https://aistudio.google.com/apikey ）
+> 3. サーバを再起動
+>
+> 設定後、もう一度質問してください。
+"""
+
+
+def gemini_status() -> dict:
+    """質問機能(Gemini)が使えるか（SDK導入済み＆APIキー設定済み）を返す。"""
+    return {
+        "available": bool(genai and GEMINI_API_KEY),
+        "sdk": bool(genai),
+        "key": bool(GEMINI_API_KEY),
+        "model": GEMINI_MODEL,
+    }
+
+
+def _build_question(question: str, selection: str | None) -> str:
+    parts = []
+    selection = _sanitize(selection)
+    if selection and selection.strip():
+        parts.append("【いま選択している箇所（質問の対象）】\n" + selection.strip())
+    parts.append("【質問】\n" + _sanitize(question).strip())
+    return "\n\n".join(parts)
+
+
+def stream_gemini(question: str, paper: str, selection: str | None,
+                  history: list[dict] | None):
+    client = genai.Client(api_key=GEMINI_API_KEY)
+
+    contents = []
+    for h in history or []:
+        role = "model" if (h or {}).get("role") == "model" else "user"
+        text = _sanitize((h or {}).get("text", ""))
+        if text:
+            contents.append(
+                genai_types.Content(role=role, parts=[genai_types.Part(text=text)])
+            )
+    contents.append(genai_types.Content(
+        role="user", parts=[genai_types.Part(text=_build_question(question, selection))]
+    ))
+
+    # 論文全文は system_instruction に固定して置く。同じ論文への連続質問では
+    # この巨大なプレフィックスが一致するため Gemini 2.5 の暗黙キャッシュが効き、
+    # 2回目以降のトークン課金と遅延が大きく下がる。
+    system = ASK_SYSTEM_INSTRUCTION
+    paper = _sanitize(paper)
+    if paper.strip():
+        system += "\n\n# 対象論文（全文）\n" + paper.strip()
+
+    config = genai_types.GenerateContentConfig(
+        system_instruction=system,
+        temperature=0.4,
+    )
+    stream = client.models.generate_content_stream(
+        model=GEMINI_MODEL, contents=contents, config=config
+    )
+    for chunk in stream:
+        piece = getattr(chunk, "text", None)
+        if piece:
+            yield piece
 
 
 app = FastAPI(title="Paper Reader")
@@ -123,10 +260,24 @@ class ExplainRequest(BaseModel):
 _SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
 
 
+def _normalize_math(s: str) -> str:
+    """数式記号（Mathematical Alphanumeric Symbols, U+1D400–U+1D7FF）を
+    ASCII/ギリシャ文字へ正規化する。pdf.js は数式の斜体 cost/φ/P 等をこの
+    領域の文字（𝑐𝑜𝑠𝑡 𝜙 𝑃 …）として抽出するが、選択箇所と周辺文脈が
+    これで埋まると軽量モデルが翻訳を諦めて英語原文を「日本語訳」に
+    丸写しする。NFKC で 𝑐𝑜𝑠𝑡→cost・𝜙→φ に戻すと翻訳が安定し、
+    出力に奇妙なグリフが残らなくなる（NFKC 対象外の予約符号は不変）。"""
+    return "".join(
+        unicodedata.normalize("NFKC", ch) if 0x1D400 <= ord(ch) <= 0x1D7FF else ch
+        for ch in s
+    )
+
+
 def _sanitize(s: str | None) -> str:
     """JSON 経由で混入し得る孤立サロゲート（数式の斜体等を pdf.js 抽出時に
-    片割れだけ拾った結果）を除去。残すと UTF-8 エンコードで落ちる。"""
-    return _SURROGATE_RE.sub("", s or "")
+    片割れだけ拾った結果）を除去。残すと UTF-8 エンコードで落ちる。
+    併せて数式記号を ASCII/ギリシャ文字へ正規化する。"""
+    return _normalize_math(_SURROGATE_RE.sub("", s or ""))
 
 
 def build_prompt(text: str, context: str | None) -> str:
@@ -149,6 +300,25 @@ def llm_status():
     return ollama_status()
 
 
+class ModelIn(BaseModel):
+    model: str
+
+
+@app.post("/api/model")
+def set_model(req: ModelIn):
+    """使用するモデルを切り替える（実行中に反映＋設定ファイルに永続化）。"""
+    global CURRENT_MODEL
+    name = (req.model or "").strip()
+    if not name:
+        raise HTTPException(400, "model is empty")
+    old = CURRENT_MODEL
+    CURRENT_MODEL = name
+    _save_model(name)
+    if old and old != name:
+        _unload_model(old)  # 旧モデルをメモリから解放（新モデルは次の解説時に load）
+    return ollama_status()
+
+
 @app.post("/api/explain")
 def explain(req: ExplainRequest):
     text = (req.text or "").strip()
@@ -162,8 +332,8 @@ def explain(req: ExplainRequest):
             return
         if not st["model_present"]:
             yield (
-                f"> ⚠️ モデル **{OLLAMA_MODEL}** が未取得です。\n>\n"
-                f"> ターミナルで `ollama pull {OLLAMA_MODEL}` を実行してから、"
+                f"> ⚠️ モデル **{CURRENT_MODEL}** が未取得です。\n>\n"
+                f"> ターミナルで `ollama pull {CURRENT_MODEL}` を実行してから、"
                 "もう一度選択してください。\n"
             )
             return
@@ -173,6 +343,36 @@ def explain(req: ExplainRequest):
             yield f"\n\n> ⚠️ Ollama エラー (HTTP {e.response.status_code})。モデル名や `ollama serve` を確認してください。"
         except Exception as e:  # noqa: BLE001
             yield f"\n\n> ⚠️ エラー: {type(e).__name__}: {e}"
+
+    return StreamingResponse(gen(), media_type="text/plain; charset=utf-8")
+
+
+class AskRequest(BaseModel):
+    question: str
+    paper: str = ""            # 論文全文（フロントが各ページ抽出テキストを結合して送る）
+    selection: str | None = None  # いま選択中の箇所（あれば質問対象として引用）
+    history: list[dict] = []   # [{role: "user"|"model", text: str}, ...]
+
+
+@app.get("/api/ask-status")
+def ask_status():
+    return gemini_status()
+
+
+@app.post("/api/ask")
+def ask(req: AskRequest):
+    question = (req.question or "").strip()
+    if not question:
+        return JSONResponse({"error": "質問が空です"}, status_code=400)
+
+    def gen():
+        if not gemini_status()["available"]:
+            yield GEMINI_SETUP_GUIDE
+            return
+        try:
+            yield from stream_gemini(question, req.paper, req.selection, req.history)
+        except Exception as e:  # noqa: BLE001
+            yield f"\n\n> ⚠️ Gemini エラー: {type(e).__name__}: {e}"
 
     return StreamingResponse(gen(), media_type="text/plain; charset=utf-8")
 
@@ -273,15 +473,25 @@ def _parse(path: Path):
             for ln in lines[1:end]:
                 if ": " in ln:
                     k, v = ln.split(": ", 1)
-                    meta[k.strip()] = v.strip()
+                    v = v.strip()
+                    if v.startswith('"') and v.endswith('"'):
+                        try:
+                            v = json.loads(v)
+                        except json.JSONDecodeError:
+                            v = v[1:-1]
+                    meta[k.strip()] = v
                 elif ln.endswith(":"):
                     meta[ln[:-1].strip()] = ""
             body = "\n".join(lines[end + 1:]).lstrip("\n")
     return meta, body
 
 
+def _fm_value(value) -> str:
+    return json.dumps(str(value or ""), ensure_ascii=False)
+
+
 def _write(path: Path, meta: dict, body: str):
-    fm = "---\n" + "".join(f"{k}: {meta.get(k, '')}\n" for k in FM_KEYS) + "---\n\n"
+    fm = "---\n" + "".join(f"{k}: {_fm_value(meta.get(k, ''))}\n" for k in FM_KEYS) + "---\n\n"
     path.write_text(fm + body.rstrip() + "\n", encoding="utf-8")
 
 

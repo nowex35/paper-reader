@@ -4,6 +4,14 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 marked.setOptions({ breaks: true });
 
+function renderMarkdown(md) {
+  const html = marked.parse(md || "");
+  if (window.DOMPurify) return DOMPurify.sanitize(html);
+  const div = document.createElement("div");
+  div.textContent = md || "";
+  return `<pre>${div.innerHTML}</pre>`;
+}
+
 const els = {
   openBtn: document.getElementById("openBtn"),
   fileInput: document.getElementById("fileInput"),
@@ -16,16 +24,18 @@ const els = {
   fab: document.getElementById("explainFab"),
   resizer: document.getElementById("resizer"),
   sidePane: document.getElementById("sidePane"),
+  modelSelect: document.getElementById("modelSelect"),
 };
 
 
-/* ---------- ローカルLLM(Ollama) セットアップ確認 ---------- */
-(async () => {
-  try {
-    const r = await fetch("/api/llm-status");
-    if (!r.ok) return;
-    const s = await r.json();
-    if (s.running && s.model_present) return; // 準備OK
+/* ---------- ローカルLLM(Ollama) セットアップ確認 ＋ モデル切替 ---------- */
+// ヘッダーの <select> にインストール済みモデルを並べ、選んだら /api/model で
+// 即座に切り替える（サーバが設定ファイルへ永続化）。Ollama 未起動・モデル
+// 未取得のときは従来どおり結果欄にセットアップ案内を出す。
+const Model = (() => {
+  const sel = els.modelSelect;
+
+  function showGuide(s) {
     const md = !s.running
       ? "### ⚙️ 初回セットアップ（ローカルLLM）\n\n" +
         "解説はあなたのPC内（Ollama）で生成します。クラウド送信なし・APIキー不要。\n\n" +
@@ -36,8 +46,67 @@ const els = {
       : "### ⚙️ モデル取得が必要\n\n" +
         "`ollama pull " + s.model + "` を実行 → 再読み込みで案内は消えます。";
     els.results.innerHTML = '<div class="card"><div class="body"></div></div>';
-    els.results.querySelector(".body").innerHTML = marked.parse(md);
-  } catch {}
+    els.results.querySelector(".body").innerHTML = renderMarkdown(md);
+  }
+
+  function populate(s) {
+    if (!sel) return;
+    const models = s.models || [];
+    if (!s.running || !models.length) {
+      sel.hidden = true;
+      return;
+    }
+    sel.innerHTML = "";
+    // 現在のモデルが一覧に無ければ（タグ違い・未取得など）先頭に補っておく
+    if (s.model && !models.includes(s.model)) {
+      const o = document.createElement("option");
+      o.value = s.model;
+      o.textContent = s.model + (s.model_present ? "" : "（未取得）");
+      sel.appendChild(o);
+    }
+    for (const name of models) {
+      const o = document.createElement("option");
+      o.value = name;
+      o.textContent = name;
+      sel.appendChild(o);
+    }
+    sel.value = s.model || models[0];
+    sel.hidden = false;
+  }
+
+  async function refresh() {
+    try {
+      const r = await fetch("/api/llm-status");
+      if (!r.ok) return;
+      const s = await r.json();
+      populate(s);
+      if (!(s.running && s.model_present)) showGuide(s);
+    } catch {}
+  }
+
+  if (sel) {
+    sel.addEventListener("change", async () => {
+      const model = sel.value;
+      els.status.textContent = "モデル切替中…";
+      try {
+        const r = await fetch("/api/model", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model }),
+        });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const s = await r.json();
+        els.status.textContent = "モデル: " + (s.model || model);
+        if (!s.model_present)
+          showGuide({ running: true, model: s.model, model_present: false });
+      } catch (e) {
+        els.status.textContent = "⚠️ モデル切替失敗: " + e.message;
+      }
+    });
+  }
+
+  refresh();
+  return { refresh };
 })();
 
 /* ---------- PDF 読み込み ---------- */
@@ -59,6 +128,7 @@ let live = 1; // ジェスチャ中の一時的な見た目倍率（確定描画
 let natW = 0;
 let natH = 0; // 確定描画時のコンテンツ自然サイズ(px)
 let renderToken = 0;
+let loadToken = 0;
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 5;
 const clampZoom = (z) => Math.min(Math.max(z, ZOOM_MIN), ZOOM_MAX);
@@ -119,15 +189,41 @@ async function renderPageNode(page, scale, dpr) {
     container: textLayer,
     viewport,
   }).promise;
-  // WebKit(WKWebView)では `font-size: calc(var(--scale-factor) * Npx)` の解決が
-  // 不安定で、span の文字幅が canvas グリフとズレる→選択した文字と src に
-  // 入る文字が食い違う事故が起きる。レンダ直後に固定 px へ書き戻して回避。
-  const calcRe = /^calc\(\s*var\(--scale-factor\)\s*\*\s*([\d.]+)px\s*\)$/;
-  for (const el of textLayer.querySelectorAll("span, br")) {
-    const m = el.style.fontSize && el.style.fontSize.match(calcRe);
-    if (m) el.style.fontSize = scale * parseFloat(m[1]) + "px";
-  }
+  const textItemIndexes = tc.items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => (item.str || "").trim())
+    .map(({ index }) => index);
+  const spans = [...textLayer.querySelectorAll("span")].filter((s) =>
+    (s.textContent || "").trim()
+  );
+  spans.forEach((span, i) => {
+    if (textItemIndexes[i] !== undefined) {
+      span.dataset.itemIndex = String(textItemIndexes[i]);
+    }
+  });
   wrap._pageText = tc.items.map((i) => i.str).join(" ");
+  wrap._textItems = tc.items.map((item, i) => {
+    const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+    const fontHeight = Math.hypot(tx[2], tx[3]) || Math.abs(item.height * scale) || 1;
+    const style = tc.styles && tc.styles[item.fontName];
+    let fontAscent = fontHeight;
+    if (style && style.ascent) fontAscent = style.ascent * fontHeight;
+    else if (style && style.descent) fontAscent = (1 + style.descent) * fontHeight;
+    const width = Math.abs(item.width * scale) || Math.max(1, (item.str || "").length * fontHeight * 0.45);
+    const left = tx[4];
+    const top = tx[5] - fontAscent;
+    return {
+      index: i,
+      str: item.str || "",
+      hasEOL: !!item.hasEOL,
+      rel: {
+        left,
+        top,
+        width,
+        height: fontHeight,
+      },
+    };
+  });
   return wrap;
 }
 
@@ -158,23 +254,37 @@ async function renderAll() {
 // ArrayBuffer から描画（id・名前は確定済み前提）。getDocument は buf を
 // 消費しうるので、ハッシュ計算・キャッシュ送信は呼び出し側で先に済ませる。
 async function openPdfBuffer(buf, name, id) {
+  const token = ++loadToken;
+  if (!(await Memo.flush())) return false;
+  if (token !== loadToken) return false;
+
   clearTimeout(commitTimer); // 保留中のズーム確定をキャンセル（別PDFと混ざらない）
+  if (typeof PdfSelection !== "undefined") PdfSelection.clear();
   els.fab.hidden = true;
   els.fileName.textContent = name;
   els.fileName.classList.remove("muted");
   els.status.textContent = "読み込み中…";
   els.container.innerHTML = "";
-  Memo.openForPdf(id, name);
   Bookmarks.load(id);
-  pdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
+  Ask.reset(); // 別の論文に切り替わるので質問の会話履歴をリセット
+  const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+  if (token !== loadToken) {
+    try { await doc.destroy(); } catch {}
+    return false;
+  }
+  pdfDoc = doc;
   zoom = 1;
   live = 1;
   els.pdfPane.scrollTop = 0;
   localStorage.setItem("lastPdfId", id);
   localStorage.setItem("lastPdfName", name);
-  await renderAll();
+  const rendered = await renderAll();
+  if (token !== loadToken || !rendered) return false;
+  await Memo.openForPdf(id, name);
+  if (token !== loadToken) return false;
   Bookmarks.renderMarkers();
   Finder.refresh(); // 検索バーが開いていたら再ハイライト
+  return true;
 }
 
 // PDF 本体をローカル（自Mac内のサーバ）にキャッシュ。失敗しても描画は継続。
@@ -243,6 +353,7 @@ function liveZoom(targetEff, cxv, cyv) {
 
 async function commitZoom() {
   if (!pdfDoc) return;
+  if (typeof PdfSelection !== "undefined") PdfSelection.clear();
   const eff = clampZoom(zoom * live);
   const token = ++renderToken; // 進行中描画を無効化＆自分の番号
   const paneW = els.pdfPane.clientWidth - 48;
@@ -303,7 +414,7 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "-") { e.preventDefault(); liveZoom(eff / 1.15, ...c); }
 });
 
-/* ---------- 選択検知 ---------- */
+/* ---------- PDF テキスト選択（独自選択） ---------- */
 // 数式の斜体（𝑄 等の BMP 外文字）は UTF-16 サロゲートペアで表現される。
 // 単純な substring/slice が片割れだけ残すと、サーバ側で UTF-8 エンコードに
 // 失敗する（surrogates not allowed）ため、孤立サロゲートを除いて返す。
@@ -321,34 +432,298 @@ function safeSlice(s, n) {
   return sanitize(s.slice(0, cut));
 }
 
-function currentSelection() {
-  const sel = window.getSelection();
-  const text = sanitize(sel ? sel.toString().trim() : "");
-  if (!text || sel.rangeCount === 0) return null;
-  const node = sel.anchorNode;
-  const elNode = node && (node.nodeType === 1 ? node : node.parentElement);
-  const wrap = elNode && elNode.closest(".pageWrap");
-  if (!wrap) return null;
-  const rect = sel.getRangeAt(0).getBoundingClientRect();
-  return { text, rect, context: safeSlice(wrap._pageText, 1600) };
+function pageTextItems(wrap) {
+  const items = wrap._textItems || [];
+  const wr = wrap.getBoundingClientRect();
+  const sx = wr.width / (wrap.offsetWidth || wr.width || 1);
+  const sy = wr.height / (wrap.offsetHeight || wr.height || 1);
+  const pageIndex = [...els.container.children].indexOf(wrap);
+  return items
+    .map((item) => {
+      if (!item || !item.str.trim()) return null;
+      const rel = item.rel || {};
+      if (!rel.width || !rel.height) return null;
+      const r = {
+        left: wr.left + rel.left * sx,
+        top: wr.top + rel.top * sy,
+        width: rel.width * sx,
+        height: rel.height * sy,
+      };
+      r.right = r.left + r.width;
+      r.bottom = r.top + r.height;
+      return {
+        ...item,
+        wrap,
+        pageIndex,
+        rect: r,
+        rel: {
+          left: rel.left,
+          top: rel.top,
+          width: rel.width,
+          height: rel.height,
+        },
+        cx: r.left + r.width / 2,
+        cy: r.top + r.height / 2,
+      };
+    })
+    .filter(Boolean);
 }
 
-document.addEventListener("mouseup", () => {
-  const s = currentSelection();
-  if (!s) {
-    els.fab.hidden = true;
-    return;
+function sliceByCodePoint(s, from, to) {
+  return Array.from(s || "").slice(from, to).join("");
+}
+
+function itemSlice(item, from, to) {
+  const chars = Array.from(item.str || "");
+  const a = Math.max(0, Math.min(chars.length, from));
+  const b = Math.max(a, Math.min(chars.length, to));
+  const leftRatio = chars.length ? a / chars.length : 0;
+  const rightRatio = chars.length ? b / chars.length : 1;
+  const left = item.rect.left + item.rect.width * leftRatio;
+  const width = item.rect.width * (rightRatio - leftRatio);
+  return {
+    ...item,
+    str: sliceByCodePoint(item.str, a, b),
+    rect: {
+      left,
+      right: left + width,
+      top: item.rect.top,
+      bottom: item.rect.bottom,
+      width,
+      height: item.rect.height,
+    },
+    rel: {
+      ...item.rel,
+      left: item.rel.left + item.rel.width * leftRatio,
+      width: item.rel.width * (rightRatio - leftRatio),
+    },
+    cx: left + width / 2,
+  };
+}
+
+function selectedTextFromItems(items) {
+  items = items.filter((i) => (i.str || "").trim());
+  if (!items.length) return "";
+  const lines = [];
+  let cur = [];
+  let lastCy = null;
+  const lineTol = Math.max(4, median(items.map((i) => i.rect.height)) * 0.65);
+  for (const item of items) {
+    if (lastCy !== null && Math.abs(item.cy - lastCy) > lineTol) {
+      lines.push(cur);
+      cur = [];
+    }
+    cur.push(item);
+    lastCy = lastCy === null ? item.cy : (lastCy * 0.7 + item.cy * 0.3);
   }
-  els.fab.style.left = Math.max(8, s.rect.left) + "px";
-  els.fab.style.top = s.rect.bottom + 8 + "px";
-  els.fab.hidden = false;
-  els.fab._payload = s;
-});
+  if (cur.length) lines.push(cur);
+  return sanitize(
+    lines
+      .map((line) =>
+        line
+          .sort((a, b) => a.rect.left - b.rect.left)
+          .map((i) => i.str)
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim()
+      )
+      .filter(Boolean)
+      .join("\n")
+      .replace(/-\n(?=[a-z])/g, "")
+      .trim()
+  );
+}
+
+function median(xs) {
+  const a = xs.filter((x) => Number.isFinite(x)).sort((x, y) => x - y);
+  return a.length ? a[Math.floor(a.length / 2)] : 0;
+}
+
+function selectionContext(items) {
+  const wrap = items[0] && items[0].wrap;
+  if (!wrap) return "";
+  const indexes = items.filter((i) => i.wrap === wrap).map((i) => i.index);
+  const first = Math.max(0, Math.min(...indexes) - 18);
+  const last = Math.min((wrap._textItems || []).length - 1, Math.max(...indexes) + 18);
+  return safeSlice(
+    (wrap._textItems || [])
+      .slice(first, last + 1)
+      .map((i) => i.str)
+      .join(" "),
+    1800
+  );
+}
+
+const PdfSelection = (() => {
+  let drag = null;
+  let current = null;
+
+  function clear() {
+    document.querySelectorAll(".select-hit").forEach((el) => el.remove());
+    current = null;
+    els.fab.hidden = true;
+  }
+
+  function point(e) {
+    return { x: e.clientX, y: e.clientY };
+  }
+
+  function draw(items) {
+    document.querySelectorAll(".select-hit").forEach((el) => el.remove());
+    for (const item of items.filter((i) => (i.str || "").trim() && i.rel.width > 0)) {
+      const h = document.createElement("div");
+      h.className = "select-hit";
+      h.style.left = item.rel.left + "px";
+      h.style.top = item.rel.top + "px";
+      h.style.width = item.rel.width + "px";
+      h.style.height = item.rel.height + "px";
+      item.wrap.appendChild(h);
+    }
+  }
+
+  function allItems() {
+    return [...els.container.querySelectorAll(".pageWrap")]
+      .flatMap((wrap) => pageTextItems(wrap))
+      .sort((a, b) => a.pageIndex - b.pageIndex || a.index - b.index);
+  }
+
+  function itemOrder(item) {
+    return item.pageIndex * 100000 + item.index;
+  }
+
+  function charOffset(item, x) {
+    const chars = Array.from(item.str || "");
+    if (!chars.length || !item.rect.width) return 0;
+    const ratio = Math.max(0, Math.min(1, (x - item.rect.left) / item.rect.width));
+    return Math.round(ratio * chars.length);
+  }
+
+  function anchorAt(p, items) {
+    let best = null;
+    let bestScore = Infinity;
+    for (const item of items) {
+      const r = item.rect;
+      const dx = p.x < r.left ? r.left - p.x : p.x > r.right ? p.x - r.right : 0;
+      const dy = p.y < r.top ? r.top - p.y : p.y > r.bottom ? p.y - r.bottom : 0;
+      const verticalPenalty = p.y >= r.top - r.height * 0.6 && p.y <= r.bottom + r.height * 0.6 ? 0 : 2000;
+      const score = dy * 6 + dx + verticalPenalty;
+      if (score < bestScore) {
+        bestScore = score;
+        best = item;
+      }
+    }
+    if (!best) return null;
+    return { item: best, offset: charOffset(best, p.x), order: itemOrder(best) };
+  }
+
+  function collect(a, b) {
+    const items = allItems();
+    const start = anchorAt(a, items);
+    const end = anchorAt(b, items);
+    if (!start || !end) return [];
+
+    let first = start;
+    let last = end;
+    if (
+      first.order > last.order ||
+      (first.order === last.order && first.offset > last.offset)
+    ) {
+      first = end;
+      last = start;
+    }
+
+    if (first.order === last.order) {
+      const frag = itemSlice(first.item, first.offset, last.offset);
+      return frag.str.trim() ? [frag] : [];
+    }
+
+    const out = [];
+    for (const item of items) {
+      const order = itemOrder(item);
+      if (order < first.order || order > last.order) continue;
+      const len = Array.from(item.str || "").length;
+      if (order === first.order) out.push(itemSlice(item, first.offset, len));
+      else if (order === last.order) out.push(itemSlice(item, 0, last.offset));
+      else out.push(item);
+    }
+    return out.filter((item) => (item.str || "").trim());
+  }
+
+  function finish(e) {
+    if (!drag) return;
+    const end = point(e);
+    const items = collect(drag.start, end);
+    drag = null;
+    if (!items.length) {
+      clear();
+      return;
+    }
+    draw(items);
+    const rects = items.map((i) => i.rect);
+    const rect = {
+      left: Math.min(...rects.map((r) => r.left)),
+      right: Math.max(...rects.map((r) => r.right)),
+      top: Math.min(...rects.map((r) => r.top)),
+      bottom: Math.max(...rects.map((r) => r.bottom)),
+    };
+    current = {
+      text: selectedTextFromItems(items),
+      rect,
+      context: selectionContext(items),
+    };
+    if (!current.text) {
+      clear();
+      return;
+    }
+    els.fab.style.left = Math.max(8, rect.left) + "px";
+    els.fab.style.top = rect.bottom + 8 + "px";
+    els.fab.hidden = false;
+    els.fab._payload = current;
+  }
+
+  els.pdfPane.addEventListener("pointerdown", (e) => {
+    if (!pdfDoc || e.button !== 0 || e.target.closest("button,input,textarea,select")) return;
+    const wrap = e.target.closest(".pageWrap");
+    if (!wrap) return;
+    window.getSelection()?.removeAllRanges();
+    clear();
+    drag = { start: point(e), pointerId: e.pointerId };
+    els.pdfPane.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  els.pdfPane.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const items = collect(drag.start, point(e));
+    draw(items);
+    e.preventDefault();
+  });
+
+  els.pdfPane.addEventListener("pointerup", (e) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    finish(e);
+    els.pdfPane.releasePointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  els.pdfPane.addEventListener("pointercancel", clear);
+
+  return {
+    current: () => current,
+    clear,
+  };
+})();
+
+function currentSelection() {
+  return PdfSelection.current();
+}
 
 document.addEventListener("mousedown", (e) => {
-  if (e.target !== els.fab) els.fab.hidden = true;
+  if (e.target !== els.fab && !e.target.closest(".pageWrap")) PdfSelection.clear();
 });
-els.pdfPane.addEventListener("scroll", () => (els.fab.hidden = true));
+els.pdfPane.addEventListener("scroll", () => {
+  els.fab.hidden = true;
+});
 
 els.fab.onclick = () => {
   els.fab.hidden = true;
@@ -401,11 +776,11 @@ async function explain(text, context) {
       const { done, value } = await reader.read();
       if (done) break;
       acc += dec.decode(value, { stream: true });
-      body.innerHTML = marked.parse(acc);
+      body.innerHTML = renderMarkdown(acc);
       els.sidePane.scrollTop = 0;
     }
   } catch (e) {
-    body.innerHTML = marked.parse(`> ⚠️ ${e.message}`);
+    body.innerHTML = renderMarkdown(`> ⚠️ ${e.message}`);
   }
   card.classList.remove("loading");
 
@@ -415,6 +790,158 @@ async function explain(text, context) {
     setTimeout(() => (ev.target.textContent = "コピー(原文+解説)"), 1500);
   };
 }
+
+/* ---------- 内容についての質問（Gemini・論文全文を文脈に） ---------- */
+// 翻訳(⌘E)はローカル Ollama・選択範囲のみ。こちらは論文全文＋会話履歴を Gemini に
+// 渡し「読んでいる文脈を踏まえた賢い回答」を得る。会話は PDF 単位（切替でリセット）。
+
+// 全ページの抽出テキストを結合して論文全文を作る。renderPageNode が各 .pageWrap の
+// _pageText に保存済みなので、ここでは並べて繋ぐだけ。
+function paperFullText() {
+  return [...els.container.querySelectorAll(".pageWrap")]
+    .map((w) => w._pageText || "")
+    .join("\n\n")
+    .trim();
+}
+
+const Ask = (() => {
+  const form = document.getElementById("askForm");
+  const input = document.getElementById("askInput");
+  const quote = document.getElementById("askQuote");
+  const send = document.getElementById("askSend");
+  const meta = document.getElementById("askMeta");
+  if (!form || !input) return { reset() {} };
+
+  let history = []; // [{role:"user"|"model", text}] — PDF単位の会話履歴
+  let quoted = ""; // いま引用中の選択テキスト（送信まで保持）
+  let busy = false;
+
+  function autosize() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 160) + "px";
+  }
+  input.addEventListener("input", autosize);
+
+  // 引用の設定/解除。PDF を選択するとキャプチャし、送信するかクリックするまで保持。
+  function setQuote(text) {
+    quoted = text || "";
+    if (quoted) {
+      const short = quoted.replace(/\s+/g, " ").slice(0, 200);
+      quote.textContent = "“" + short + (quoted.length > 200 ? "…" : "") + "”";
+      quote.title = "クリックで引用を外す";
+      quote.hidden = false;
+    } else {
+      quote.hidden = true;
+    }
+  }
+  // PDF テキストを選択したら引用に取り込む（textarea 入力中も消えないよう保持）。
+  document.addEventListener("mouseup", () => {
+    const s = currentSelection();
+    if (s && s.text) setQuote(s.text);
+  });
+  quote.addEventListener("click", () => setQuote(""));
+
+  async function checkStatus() {
+    try {
+      const r = await fetch("/api/ask-status");
+      if (!r.ok) return;
+      const s = await r.json();
+      meta.textContent = s.available
+        ? "質問: Gemini " + s.model
+        : s.sdk
+        ? "⚠️ 質問は未設定（.env に GEMINI_API_KEY）"
+        : "⚠️ 質問は未設定（pip install google-genai ＋ GEMINI_API_KEY）";
+    } catch {}
+  }
+
+  async function submit() {
+    const q = input.value.trim();
+    if (!q || busy) return;
+    if (!pdfDoc) {
+      meta.textContent = "先に PDF を開いてください";
+      return;
+    }
+    const selection = quoted;
+
+    busy = true;
+    send.disabled = true;
+    input.value = "";
+    autosize();
+    setQuote("");
+
+    const empty = els.results.querySelector(".empty");
+    if (empty) empty.remove();
+    const card = document.createElement("div");
+    card.className = "card ask loading";
+    card.innerHTML = `
+      <div class="src"></div>
+      <div class="body"></div>
+      <div class="toolbar"><button class="copyBtn">コピー(質問+回答)</button></div>`;
+    card.querySelector(".src").textContent =
+      (selection ? "「" + selection.replace(/\s+/g, " ").slice(0, 200) + "」\n\n" : "") +
+      "Q: " + q;
+    const body = card.querySelector(".body");
+    els.results.prepend(card);
+    els.results.scrollTop = 0;
+
+    let acc = "";
+    try {
+      const resp = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q, paper: paperFullText(), selection, history }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${resp.status}`);
+      }
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += dec.decode(value, { stream: true });
+        body.innerHTML = renderMarkdown(acc);
+      }
+      // 次の質問で文脈として送れるよう会話履歴に積む。
+      history.push({
+        role: "user",
+        text: (selection ? "（引用）" + selection + "\n" : "") + q,
+      });
+      history.push({ role: "model", text: acc });
+    } catch (e) {
+      body.innerHTML = renderMarkdown(`> ⚠️ ${e.message}`);
+    }
+    card.classList.remove("loading");
+    card.querySelector(".copyBtn").onclick = (ev) => {
+      navigator.clipboard.writeText(`## Q\n${q}\n\n## A\n${acc}`);
+      ev.target.textContent = "コピーしました ✓";
+      setTimeout(() => (ev.target.textContent = "コピー(質問+回答)"), 1500);
+    };
+    busy = false;
+    send.disabled = false;
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    submit();
+  });
+  // ⌘/Ctrl+Enter で送信（Enter 単独は改行のまま）。
+  input.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      submit();
+    }
+  });
+
+  function reset() {
+    history = [];
+    setQuote("");
+  }
+
+  checkStatus();
+  return { reset };
+})();
 
 /* ---------- サイドペイン幅リサイズ ---------- */
 let dragging = false;
@@ -494,6 +1021,22 @@ const Bookmarks = (() => {
   function currentLocation() {
     const ps = pages();
     if (!ps.length) return null;
+    const activeSelection =
+      typeof PdfSelection !== "undefined" && PdfSelection.current();
+    if (activeSelection && activeSelection.rect) {
+      const centerY =
+        activeSelection.rect.top +
+        (activeSelection.rect.bottom - activeSelection.rect.top) / 2;
+      for (let i = 0; i < ps.length; i++) {
+        const wr = ps[i].getBoundingClientRect();
+        if (wr.top <= centerY && wr.bottom >= centerY) {
+          return {
+            pageIndex: i,
+            y: Math.max(0, Math.min(1, (centerY - wr.top) / wr.height)),
+          };
+        }
+      }
+    }
     const sel = window.getSelection();
     if (sel && sel.rangeCount && sel.toString().trim()) {
       const node = sel.anchorNode;
@@ -837,7 +1380,7 @@ const Memo = (() => {
   // DOM が古い（キャッシュ食い違い等）場合でも本体を巻き込まない
   if (!panel || !toggle || !titleEl || !bodyEl || !summaryView) {
     console.warn("[memo] UI要素が見つからないためメモ機能を無効化（ハードリロード推奨）");
-    return { openForPdf() {}, openExisting() {}, setOpen() {} };
+    return { openForPdf() {}, openExisting() {}, setOpen() {}, async flush() { return true; } };
   }
 
   // 落合フォーマット6項目。key はサーバの SUMMARY_KEYS と一致させること。
@@ -876,7 +1419,10 @@ const Memo = (() => {
 
   let cur = null; // {id, title, pdf}
   let dirty = false;
+  let dirtyVersion = 0;
   let saveTimer = null;
+  let loadingSeq = 0;
+  let saving = null;
   let preview = false;
   let tab = "memo"; // "memo" | "summary"
 
@@ -916,6 +1462,7 @@ const Memo = (() => {
     bodyEl.value = note.body || "";
     fillSummary(note.summary);
     dirty = false;
+    dirtyVersion++;
     setEditable(true);
     if (preview) renderPreview();
     setStatus(note.updated ? "保存済み " + fmtDate(note.updated) : "新規メモ");
@@ -927,6 +1474,7 @@ const Memo = (() => {
     bodyEl.value = "";
     fillSummary(null);
     dirty = false;
+    dirtyVersion++;
     setEditable(true);
     if (preview) renderPreview();
     setStatus("新規メモ（入力すると自動保存）");
@@ -934,18 +1482,24 @@ const Memo = (() => {
   }
 
   async function openForPdf(id, pdfName) {
+    if (!(await flush())) return;
+    const seq = ++loadingSeq;
     try {
       const r = await fetch("/api/notes/" + id);
+      if (seq !== loadingSeq) return;
       if (r.ok) load(await r.json());
       else blank(id, pdfName);
     } catch {
-      blank(id, pdfName);
+      if (seq === loadingSeq) blank(id, pdfName);
     }
   }
   async function openExisting(id) {
+    if (!(await flush())) return;
+    const seq = ++loadingSeq;
     setOpen(true);
     try {
       const r = await fetch("/api/notes/" + id);
+      if (seq !== loadingSeq) return;
       if (r.ok) load(await r.json());
     } catch {}
   }
@@ -953,43 +1507,63 @@ const Memo = (() => {
   function markDirty() {
     if (!cur) return;
     dirty = true;
+    dirtyVersion++;
     setStatus("編集中…");
     clearTimeout(saveTimer);
     saveTimer = setTimeout(save, 1200);
     if (preview) renderPreview();
   }
   async function save() {
+    if (saving) return saving;
     if (!cur || !dirty) return;
     clearTimeout(saveTimer);
     setStatus("保存中…");
-    try {
-      const r = await fetch("/api/notes/" + cur.id, {
+    const id = cur.id;
+    const pdf = cur.pdf || null;
+    const payload = {
+      title: titleEl.value.trim() || "Untitled",
+      body: bodyEl.value,
+      pdf,
+      summary: collectSummary(),
+    };
+    const version = dirtyVersion;
+    saving = (async () => {
+      try {
+        const r = await fetch("/api/notes/" + id, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: titleEl.value.trim() || "Untitled",
-          body: bodyEl.value,
-          pdf: cur.pdf || null,
-          summary: collectSummary(),
-        }),
-      });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      const d = await r.json();
-      cur.title = d.title;
-      dirty = false;
-      setStatus("保存済み " + fmtDate(d.updated));
-      emit("memos-changed");
-    } catch (e) {
-      setStatus("⚠️ 保存失敗: " + e.message);
-    }
+          body: JSON.stringify(payload),
+        });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const d = await r.json();
+        if (cur && cur.id === id && dirtyVersion === version) {
+          cur.title = d.title;
+          dirty = false;
+          setStatus("保存済み " + fmtDate(d.updated));
+        }
+        emit("memos-changed");
+      } catch (e) {
+        setStatus("⚠️ 保存失敗: " + e.message);
+      } finally {
+        saving = null;
+      }
+    })();
+    return saving;
+  }
+
+  async function flush() {
+    clearTimeout(saveTimer);
+    if (saving) await saving;
+    if (dirty) await save();
+    return !dirty;
   }
 
   function renderPreview() {
-    previewEl.innerHTML = marked.parse(
+    previewEl.innerHTML = renderMarkdown(
       bodyEl.value || "_（まだ何も書かれていません）_"
     );
     eachSum((_, f) => {
-      f.pv.innerHTML = f.ta.value.trim() ? marked.parse(f.ta.value) : "";
+      f.pv.innerHTML = f.ta.value.trim() ? renderMarkdown(f.ta.value) : "";
     });
   }
   function setPreview(on) {
@@ -1073,7 +1647,7 @@ const Memo = (() => {
   setTab(localStorage.getItem("memoTab") || "memo");
   if (localStorage.getItem("memoOpen") === "1") setOpen(true);
 
-  return { openForPdf, openExisting, setOpen };
+  return { openForPdf, openExisting, setOpen, flush };
 })();
 
 /* ---------- 左サイドバー: 読んだ論文の一覧（ChatGPT風） ---------- */
