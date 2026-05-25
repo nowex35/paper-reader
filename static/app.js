@@ -4,12 +4,55 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 marked.setOptions({ breaks: true });
 
+// 数式($...$, $$...$$, \(...\), \[...\])を KaTeX で描画する。
+// marked が TeX 内の _ や \ を誤って解釈しないよう、いったんプレースホルダに退避し
+// Markdown 化＋サニタイズの後で KaTeX 出力に差し替える。
+function renderTeX(tex, display) {
+  if (window.katex) {
+    try {
+      return katex.renderToString(tex, {
+        displayMode: display,
+        throwOnError: false,
+        output: "html",
+      });
+    } catch (e) {
+      /* 失敗時は元の記法をそのまま表示 */
+    }
+  }
+  const d = display ? "$$" : "$";
+  const esc = document.createElement("div");
+  esc.textContent = d + tex + d;
+  return esc.innerHTML;
+}
+
 function renderMarkdown(md) {
-  const html = marked.parse(md || "");
-  if (window.DOMPurify) return DOMPurify.sanitize(html);
-  const div = document.createElement("div");
-  div.textContent = md || "";
-  return `<pre>${div.innerHTML}</pre>`;
+  let src = md || "";
+  const math = [];
+  const stash = (tex, display) => {
+    const token = `@@KATEX${math.length}@@`;
+    math.push({ tex: tex.trim(), display });
+    return token;
+  };
+  src = src
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_, t) => stash(t, true))
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_, t) => stash(t, true))
+    .replace(/\\\(([\s\S]+?)\\\)/g, (_, t) => stash(t, false))
+    .replace(/\$([^\s$][^$\n]*?)\$/g, (_, t) => stash(t, false));
+
+  let html;
+  if (window.marked) {
+    html = marked.parse(src);
+    if (window.DOMPurify) html = DOMPurify.sanitize(html);
+  } else {
+    const div = document.createElement("div");
+    div.textContent = src;
+    html = `<pre>${div.innerHTML}</pre>`;
+  }
+
+  return html.replace(/@@KATEX(\d+)@@/g, (_, i) => {
+    const m = math[+i];
+    return m ? renderTeX(m.tex, m.display) : "";
+  });
 }
 
 const els = {
