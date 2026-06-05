@@ -1406,6 +1406,114 @@ async function sha256Id(buf) {
     .join("");
 }
 
+/* ---------- Markdown リスト編集支援（textarea 用） ----------
+ * - Enter: リスト行なら同じレベルでマーカーを継続（番号付きは+1）。
+ *          本文が空のリスト項目で Enter を押すと 1 段だけ左へ（最上位なら解除）。
+ * - Tab / Shift+Tab: 行(複数選択可)を右/左にインデント。
+ * IME 変換確定の Enter は無視する。
+ */
+const LIST_RE = /^(\s*)([-*+]|\d+[.)])(\s+)(\[[ xX]\]\s+)?(.*)$/;
+const LIST_INDENT = "  "; // 2スペース = 1レベル
+
+function fireInput(ta) {
+  ta.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function lineRegion(v, s, e) {
+  const start = v.lastIndexOf("\n", s - 1) + 1;
+  const probe = e > s ? e - 1 : e; // 末尾が行頭(改行直後)の空行を巻き込まない
+  let end = v.indexOf("\n", probe);
+  if (end === -1) end = v.length;
+  return { start, end };
+}
+
+function indentSelection(ta) {
+  const v = ta.value;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const { start, end } = lineRegion(v, s, e);
+  const lines = v.slice(start, end).split("\n");
+  const out = lines.map((l) => LIST_INDENT + l).join("\n");
+  ta.value = v.slice(0, start) + out + v.slice(end);
+  const w = LIST_INDENT.length;
+  ta.setSelectionRange(s + w, e + w * lines.length);
+  fireInput(ta);
+}
+
+function outdentSelection(ta) {
+  const v = ta.value;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const { start, end } = lineRegion(v, s, e);
+  const lines = v.slice(start, end).split("\n");
+  let firstCut = 0, totalCut = 0;
+  const out = lines
+    .map((l, i) => {
+      let n = 0;
+      if (l.startsWith(LIST_INDENT)) n = LIST_INDENT.length;
+      else if (l.startsWith("\t")) n = 1;
+      else { const m = /^ +/.exec(l); if (m) n = Math.min(m[0].length, LIST_INDENT.length); }
+      if (i === 0) firstCut = n;
+      totalCut += n;
+      return l.slice(n);
+    })
+    .join("\n");
+  ta.value = v.slice(0, start) + out + v.slice(end);
+  const newS = Math.max(start, s - firstCut);
+  ta.setSelectionRange(newS, Math.max(newS, e - totalCut));
+  fireInput(ta);
+}
+
+function handleListEnter(ta, ev) {
+  const v = ta.value, s = ta.selectionStart;
+  if (s !== ta.selectionEnd) return; // 範囲選択中は通常改行
+  const ls = v.lastIndexOf("\n", s - 1) + 1;
+  let le = v.indexOf("\n", s);
+  if (le === -1) le = v.length;
+  const m = LIST_RE.exec(v.slice(ls, le));
+  if (!m) return;
+  const [, indent, marker, space, checkbox, content] = m;
+  ev.preventDefault();
+
+  // 本文が空 → 左へ1段ずらす（最上位ならマーカー解除）
+  if (content.trim() === "") {
+    let line;
+    if (indent.length >= LIST_INDENT.length)
+      line = indent.slice(LIST_INDENT.length) + marker + space + (checkbox ? "[ ] " : "");
+    else if (indent.length > 0)
+      line = marker + space + (checkbox ? "[ ] " : "");
+    else line = "";
+    ta.value = v.slice(0, ls) + line + v.slice(le);
+    const c = ls + line.length;
+    ta.setSelectionRange(c, c);
+    fireInput(ta);
+    return;
+  }
+
+  // 本文あり → 同レベルでマーカー継続（番号付きはインクリメント）
+  let next = marker;
+  const num = /^(\d+)([.)])$/.exec(marker);
+  if (num) next = parseInt(num[1], 10) + 1 + num[2];
+  const ins = "\n" + indent + next + space + (checkbox ? "[ ] " : "");
+  ta.setSelectionRange(s, s);
+  if (!document.execCommand("insertText", false, ins)) {
+    ta.value = v.slice(0, s) + ins + v.slice(s);
+    const c = s + ins.length;
+    ta.setSelectionRange(c, c);
+    fireInput(ta);
+  }
+}
+
+function attachListEditing(ta) {
+  ta.addEventListener("keydown", (e) => {
+    if (e.isComposing || e.keyCode === 229) return; // IME 変換中
+    if (e.key === "Tab") {
+      e.preventDefault();
+      e.shiftKey ? outdentSelection(ta) : indentSelection(ta);
+    } else if (e.key === "Enter" && !e.shiftKey) {
+      handleListEnter(ta, e);
+    }
+  });
+}
+
 const Memo = (() => {
   const $ = (id) => document.getElementById(id);
   const panel = $("memoPanel");
@@ -1639,7 +1747,11 @@ const Memo = (() => {
   });
   titleEl.addEventListener("input", markDirty);
   bodyEl.addEventListener("input", markDirty);
-  eachSum((_, f) => f.ta.addEventListener("input", markDirty));
+  attachListEditing(bodyEl);
+  eachSum((_, f) => {
+    f.ta.addEventListener("input", markDirty);
+    attachListEditing(f.ta);
+  });
   $("memoSaveBtn").onclick = save;
   previewBtn.onclick = () => setPreview(!preview);
   $("memoDeleteBtn").onclick = async () => {
