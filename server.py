@@ -30,7 +30,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 # 解説はローカルLLM（Ollama）で生成。クラウド送信なし・APIキー不要。
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:4b-instruct").strip()
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:4b").strip()
 
 # 内容についての「質問」は賢いクラウドLLM（Gemini）に投げる。翻訳=ローカル(Ollama)、
 # 質問=Gemini という役割分担。質問機能を使うときだけ GEMINI_API_KEY を設定すればよく、

@@ -18,7 +18,7 @@ import urllib.request
 import uvicorn
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODEL = "qwen3:4b-instruct"
+DEFAULT_MODEL = "qwen3.5:4b"
 
 LOADING_HTML = """
 <!DOCTYPE html>

@@ -52,7 +52,7 @@ if ! curl -sf http://localhost:11434/api/version &>/dev/null; then
 fi
 
 # ---- 5. モデル取得 ----
-MODEL="qwen3:4b-instruct"
+MODEL="qwen3.5:4b"
 # .settings.json にモデル指定があればそれを使う
 if [ -f "$APPDIR/.settings.json" ]; then
   SAVED=$(python3 -c "import json; print(json.load(open('$APPDIR/.settings.json')).get('model',''))" 2>/dev/null || true)
