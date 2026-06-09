@@ -543,7 +543,7 @@ button.danger:hover { background: #fdecea; }
   border-color: #ececef;
 }
 
-.memoView { flex: 1; min-height: 0; overflow: auto; padding: 12px 40px; }
+.memoView { flex: 1; min-height: 0; overflow: auto; padding: 12px 30px; }
 #memoEdit { display: flex; flex-direction: column; gap: 8px; }
 #memoMemoView { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
