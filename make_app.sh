@@ -1,9 +1,9 @@
 #!/bin/bash
-# Naruhodo.app を「このリポジトリの場所」に合わせて生成する。
+# Naruhodo Plus.app を「このリポジトリの場所」に合わせて生成する。
 #
 # .app は環境依存（中のランチャが絶対パス固定）なのでリポジトリには含めない。
 # clone した各自のマシンで一度だけ実行すれば、その clone 先のパスで
-# 正しく動く Naruhodo.app が手に入る。
+# 正しく動く Naruhodo Plus.app が手に入る。
 #
 #   ./make_app.sh
 #
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 APPDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP="$APPDIR/Naruhodo.app"
+APP="$APPDIR/Naruhodo Plus.app"
 
 if [ ! -x "$APPDIR/.venv/bin/python" ]; then
   echo "⚠️  $APPDIR/.venv が見つかりません。先に README の「セットアップ 2.」を実行してください:" >&2
@@ -27,9 +27,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Naruhodo</string>
-  <key>CFBundleDisplayName</key><string>Naruhodo</string>
-  <key>CFBundleIdentifier</key><string>local.naruhodo</string>
+  <key>CFBundleName</key><string>Naruhodo Plus</string>
+  <key>CFBundleDisplayName</key><string>Naruhodo Plus</string>
+  <key>CFBundleIdentifier</key><string>local.naruhodo-plus</string>
   <key>CFBundleVersion</key><string>1.0</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundleExecutable</key><string>naruhodo</string>

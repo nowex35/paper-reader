@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#3b82f6"/>
-      <stop offset="100%" stop-color="#1c6dff"/>
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#4f46e5"/>
     </linearGradient>
     <linearGradient id="paper" x1="0.3" y1="0" x2="0.7" y2="1">
       <stop offset="0%" stop-color="#ffffff"/>
@@ -14,16 +14,13 @@
     </linearGradient>
   </defs>
 
-  <!-- Rounded square background -->
+  <!-- Rounded square background (purple gradient) -->
   <rect x="0" y="0" width="1024" height="1024" rx="228" ry="228" fill="url(#bg)"/>
 
   <!-- Paper/document -->
   <g transform="translate(220, 160)">
-    <!-- Paper shadow -->
     <rect x="16" y="16" width="400" height="520" rx="24" fill="rgba(0,0,0,0.15)"/>
-    <!-- Paper body -->
     <rect x="0" y="0" width="400" height="520" rx="24" fill="url(#paper)"/>
-    <!-- Text lines -->
     <rect x="56" y="72" width="288" height="14" rx="7" fill="#b0bec5" opacity="0.7"/>
     <rect x="56" y="112" width="240" height="14" rx="7" fill="#b0bec5" opacity="0.5"/>
     <rect x="56" y="152" width="270" height="14" rx="7" fill="#b0bec5" opacity="0.7"/>
@@ -35,20 +32,15 @@
     <rect x="56" y="432" width="260" height="14" rx="7" fill="#b0bec5" opacity="0.5"/>
   </g>
 
-  <!-- Lightbulb (aha! moment) -->
+  <!-- Lightbulb -->
   <g transform="translate(580, 440)">
-    <!-- Glow -->
     <circle cx="140" cy="130" r="160" fill="#fde68a" opacity="0.2"/>
     <circle cx="140" cy="130" r="110" fill="#fde68a" opacity="0.15"/>
-    <!-- Bulb body -->
     <path d="M140 20 C60 20, 0 85, 0 155 C0 210, 40 250, 80 280 L80 320 L200 320 L200 280 C240 250, 280 210, 280 155 C280 85, 220 20, 140 20 Z" fill="url(#bulb)"/>
-    <!-- Bulb highlight -->
     <ellipse cx="120" cy="110" rx="40" ry="55" fill="white" opacity="0.35"/>
-    <!-- Base -->
     <rect x="85" y="320" width="110" height="16" rx="4" fill="#d97706"/>
     <rect x="90" y="340" width="100" height="16" rx="4" fill="#b45309"/>
     <rect x="100" y="360" width="80" height="12" rx="6" fill="#92400e"/>
-    <!-- Rays -->
     <g stroke="#fde68a" stroke-width="10" stroke-linecap="round" opacity="0.7">
       <line x1="140" y1="-30" x2="140" y2="-65"/>
       <line x1="40" y1="10" x2="10" y2="-15"/>
@@ -56,5 +48,12 @@
       <line x1="-40" y1="130" x2="-75" y2="130"/>
       <line x1="320" y1="130" x2="355" y2="130"/>
     </g>
+  </g>
+
+  <!-- Plus badge -->
+  <g transform="translate(780, 70)">
+    <circle cx="0" cy="0" r="90" fill="#fff" opacity="0.95"/>
+    <rect x="-50" y="-12" width="100" height="24" rx="6" fill="#7c3aed"/>
+    <rect x="-12" y="-50" width="24" height="100" rx="6" fill="#7c3aed"/>
   </g>
 </svg>

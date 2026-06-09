@@ -1,15 +1,15 @@
 #!/bin/bash
-# Naruhodo.dmg を生成する。
+# Naruhodo Plus.dmg を生成する。
 # ユーザーは DMG を開いて .app を /Applications にドラッグするだけ。
 # 初回起動時に Python venv 構築・Ollama セットアップ・モデル pull が自動で走る。
 set -euo pipefail
 
 SRCDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK=$(mktemp -d)
-APP="$WORK/Naruhodo.app"
-DMG="$SRCDIR/Naruhodo.dmg"
+APP="$WORK/Naruhodo Plus.app"
+DMG="$SRCDIR/Naruhodo Plus.dmg"
 
-echo "📦 Naruhodo.app をパッケージング中…"
+echo "📦 Naruhodo Plus.app をパッケージング中…"
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/app"
 
@@ -19,9 +19,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Naruhodo</string>
-  <key>CFBundleDisplayName</key><string>Naruhodo</string>
-  <key>CFBundleIdentifier</key><string>local.naruhodo</string>
+  <key>CFBundleName</key><string>Naruhodo Plus</string>
+  <key>CFBundleDisplayName</key><string>Naruhodo Plus</string>
+  <key>CFBundleIdentifier</key><string>local.naruhodo-plus</string>
   <key>CFBundleVersion</key><string>1.0</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundleExecutable</key><string>naruhodo</string>
@@ -58,7 +58,7 @@ cat > "$APP/Contents/MacOS/naruhodo" <<'LAUNCHER'
 # Naruhodo ランチャ — 初回起動時に環境を自動構築する。
 
 RESOURCES="$(dirname "$0")/../Resources"
-APPDATA="$HOME/Library/Application Support/Naruhodo"
+APPDATA="$HOME/Library/Application Support/Naruhodo Plus"
 
 # ---- データ領域を準備 ----
 mkdir -p "$APPDATA"
@@ -86,7 +86,7 @@ if ! command -v ollama &>/dev/null && [ ! -d "/Applications/Ollama.app" ]; then
     brew install ollama 2>&1
   else
     # Homebrew も無い場合は公式インストーラを案内
-    osascript -e 'display dialog "Naruhodo を使うには Ollama が必要です。\n\nhttps://ollama.com/download\n\nからインストールして、もう一度起動してください。" buttons {"OK"} default button "OK" with title "Naruhodo"'
+    osascript -e 'display dialog "Naruhodo を使うには Ollama が必要です。\n\nhttps://ollama.com/download\n\nからインストールして、もう一度起動してください。" buttons {"OK"} default button "OK" with title "Naruhodo Plus"'
     open "https://ollama.com/download"
     exit 0
   fi
@@ -121,10 +121,10 @@ chmod +x "$APP/Contents/MacOS/naruhodo"
 ln -s /Applications "$WORK/Applications"
 
 rm -f "$DMG"
-hdiutil create -volname "Naruhodo" -srcfolder "$WORK" -ov -format UDZO "$DMG" 2>&1
+hdiutil create -volname "Naruhodo Plus" -srcfolder "$WORK" -ov -format UDZO "$DMG" 2>&1
 
 rm -rf "$WORK"
 
 echo ""
 echo "✅ $DMG を生成しました"
-echo "   配布: DMG を渡すだけ。ユーザーは Naruhodo.app を Applications にドラッグ → ダブルクリック。"
+echo "   配布: DMG を渡すだけ。ユーザーは Naruhodo Plus.app を Applications にドラッグ → ダブルクリック。"

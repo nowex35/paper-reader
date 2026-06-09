@@ -152,7 +152,7 @@ def main() -> None:
     import webview
 
     webview.create_window(
-        "Naruhodo",
+        "Naruhodo Plus",
         f"http://127.0.0.1:{PORT}",
         width=1440,
         height=900,

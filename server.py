@@ -241,7 +241,7 @@ def stream_gemini(question: str, paper: str, selection: str | None,
             yield piece
 
 
-app = FastAPI(title="Naruhodo")
+app = FastAPI(title="Naruhodo Plus")
 
 
 @app.middleware("http")
