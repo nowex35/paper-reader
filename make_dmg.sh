@@ -55,19 +55,26 @@ mkdir -p "$APP/Contents/Resources/app/pdfs"
 # ---- ランチャスクリプト（自己完結・初回セットアップ付き） ----
 cat > "$APP/Contents/MacOS/naruhodo" <<'LAUNCHER'
 #!/bin/bash
-# Naruhodo ランチャ — 初回起動時に環境を自動構築する。
+# Naruhodo Plus ランチャ — 初回起動時に環境を自動構築する。
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+eval "$(brew shellenv 2>/dev/null)" || true
 
 RESOURCES="$(dirname "$0")/../Resources"
 APPDATA="$HOME/Library/Application Support/Naruhodo Plus"
+LOG="$APPDATA/naruhodo.log"
+
+mkdir -p "$APPDATA"
+
+log() { echo "[$(date '+%H:%M:%S')] $1" >> "$LOG"; }
+log "=== Naruhodo Plus launch ==="
 
 # ---- データ領域を準備 ----
-mkdir -p "$APPDATA"
 for d in notes bookmarks conversations pdfs static; do
   if [ ! -e "$APPDATA/$d" ]; then
     cp -r "$RESOURCES/app/$d" "$APPDATA/$d" 2>/dev/null || mkdir -p "$APPDATA/$d"
   fi
 done
-# ソースは常に最新を上書き
 cp "$RESOURCES/app/server.py" "$RESOURCES/app/desktop.py" "$RESOURCES/app/requirements.txt" "$APPDATA/"
 cp -r "$RESOURCES/app/static" "$APPDATA/"
 if [ -f "$RESOURCES/app/.env.example" ] && [ ! -f "$APPDATA/.env" ]; then
@@ -83,10 +90,10 @@ ollama_ready() {
 
 if ! command -v ollama &>/dev/null && [ ! -d "/Applications/Ollama.app" ]; then
   if command -v brew &>/dev/null; then
-    brew install ollama 2>&1
+    log "Installing Ollama via brew..."
+    brew install ollama >> "$LOG" 2>&1
   else
-    # Homebrew も無い場合は公式インストーラを案内
-    osascript -e 'display dialog "Naruhodo を使うには Ollama が必要です。\n\nhttps://ollama.com/download\n\nからインストールして、もう一度起動してください。" buttons {"OK"} default button "OK" with title "Naruhodo Plus"'
+    osascript -e 'display dialog "Naruhodo Plus を使うには Ollama が必要です。\n\nhttps://ollama.com/download\n\nからインストールして、もう一度起動してください。" buttons {"OK"} default button "OK" with title "Naruhodo Plus"'
     open "https://ollama.com/download"
     exit 0
   fi
@@ -94,10 +101,11 @@ fi
 
 # ---- Ollama 起動 ----
 if ! ollama_ready; then
+  log "Starting Ollama..."
   if [ -d "/Applications/Ollama.app" ]; then
     open -a Ollama
   elif command -v ollama &>/dev/null; then
-    ollama serve &>/dev/null &
+    ollama serve >> "$LOG" 2>&1 &
   fi
   for i in $(seq 1 30); do
     ollama_ready && break
@@ -105,14 +113,43 @@ if ! ollama_ready; then
   done
 fi
 
+# ---- Python を探す ----
+PYTHON=""
+for p in python3 /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
+  if command -v "$p" &>/dev/null; then
+    PYTHON="$p"
+    break
+  fi
+done
+if [ -z "$PYTHON" ]; then
+  log "ERROR: python3 not found"
+  osascript -e 'display dialog "Python 3 が見つかりません。\n\nbrew install python\n\nを実行してから、もう一度起動してください。" buttons {"OK"} default button "OK" with title "Naruhodo Plus"'
+  exit 1
+fi
+log "Using Python: $PYTHON"
+
 # ---- Python venv ----
 if [ ! -x "$APPDATA/.venv/bin/python" ]; then
-  python3 -m venv "$APPDATA/.venv" 2>&1
+  log "Creating venv..."
+  "$PYTHON" -m venv "$APPDATA/.venv" >> "$LOG" 2>&1
+  if [ $? -ne 0 ]; then
+    log "ERROR: venv creation failed"
+    osascript -e 'display dialog "Python 仮想環境の作成に失敗しました。\nログ: '"$LOG"'" buttons {"OK"} default button "OK" with title "Naruhodo Plus"'
+    exit 1
+  fi
 fi
-"$APPDATA/.venv/bin/pip" install -q -r "$APPDATA/requirements.txt" 2>&1
+
+log "Installing dependencies..."
+"$APPDATA/.venv/bin/pip" install -q -r "$APPDATA/requirements.txt" >> "$LOG" 2>&1
+if [ $? -ne 0 ]; then
+  log "ERROR: pip install failed"
+  osascript -e 'display dialog "依存パッケージのインストールに失敗しました。\nログ: '"$LOG"'" buttons {"OK"} default button "OK" with title "Naruhodo Plus"'
+  exit 1
+fi
 
 # ---- 起動 ----
-exec "$APPDATA/.venv/bin/python" -u "$APPDATA/desktop.py" >> "$APPDATA/naruhodo.log" 2>&1
+log "Starting app..."
+exec "$APPDATA/.venv/bin/python" -u "$APPDATA/desktop.py" >> "$LOG" 2>&1
 LAUNCHER
 chmod +x "$APP/Contents/MacOS/naruhodo"
 
