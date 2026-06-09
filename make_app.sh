@@ -1,9 +1,9 @@
 #!/bin/bash
-# Paper Reader.app を「このリポジトリの場所」に合わせて生成する。
+# Naruhodo.app を「このリポジトリの場所」に合わせて生成する。
 #
 # .app は環境依存（中のランチャが絶対パス固定）なのでリポジトリには含めない。
 # clone した各自のマシンで一度だけ実行すれば、その clone 先のパスで
-# 正しく動く Paper Reader.app が手に入る。
+# 正しく動く Naruhodo.app が手に入る。
 #
 #   ./make_app.sh
 #
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 APPDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP="$APPDIR/Paper Reader.app"
+APP="$APPDIR/Naruhodo.app"
 
 if [ ! -x "$APPDIR/.venv/bin/python" ]; then
   echo "⚠️  $APPDIR/.venv が見つかりません。先に README の「セットアップ 2.」を実行してください:" >&2
@@ -27,28 +27,34 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Paper Reader</string>
-  <key>CFBundleDisplayName</key><string>Paper Reader</string>
-  <key>CFBundleIdentifier</key><string>local.paperreader</string>
+  <key>CFBundleName</key><string>Naruhodo</string>
+  <key>CFBundleDisplayName</key><string>Naruhodo</string>
+  <key>CFBundleIdentifier</key><string>local.naruhodo</string>
   <key>CFBundleVersion</key><string>1.0</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
-  <key>CFBundleExecutable</key><string>paper-reader</string>
+  <key>CFBundleExecutable</key><string>naruhodo</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
 </dict>
 </plist>
 PLIST
 
+# アイコンを Resources にコピー
+if [ -f "$APPDIR/icon.icns" ]; then
+  cp "$APPDIR/icon.icns" "$APP/Contents/Resources/AppIcon.icns"
+fi
+
 # ランチャ。$APPDIR はビルド時に確定値で焼き込み、内部の \$APPDIR は実行時参照。
-cat > "$APP/Contents/MacOS/paper-reader" <<EOF
+cat > "$APP/Contents/MacOS/naruhodo" <<EOF
 #!/bin/bash
 # 自動生成: make_app.sh。この clone の場所に固定（移動しても動く）。
 APPDIR="$APPDIR"
 cd "\$APPDIR" || exit 1
 exec "\$APPDIR/.venv/bin/python" -u "\$APPDIR/desktop.py" >> "\$APPDIR/.app.log" 2>&1
 EOF
-chmod +x "$APP/Contents/MacOS/paper-reader"
+chmod +x "$APP/Contents/MacOS/naruhodo"
 
 echo "✅ 生成しました: $APP"
 echo "   ダブルクリックで起動できます。Dock に置きたい場合は /Applications か Dock にドラッグ。"

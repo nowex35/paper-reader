@@ -1,4 +1,4 @@
-/* Paper Reader — PDF選択 → その場で日本語訳＋解説 */
+/* Naruhodo — PDF選択 → その場で日本語訳＋解説 */
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -79,17 +79,56 @@ const Model = (() => {
   const sel = els.modelSelect;
 
   function showGuide(s) {
-    const md = !s.running
-      ? "### ⚙️ 初回セットアップ（ローカルLLM）\n\n" +
-        "解説はあなたのPC内（Ollama）で生成します。クラウド送信なし・APIキー不要。\n\n" +
-        "1. `brew install ollama`（または https://ollama.com/download ）\n" +
-        "2. 別ターミナルで `ollama serve`\n" +
-        "3. `ollama pull " + s.model + "`（約5GB・初回のみ）\n\n" +
-        "準備後にページを再読み込みすると、この案内は消えます。"
-      : "### ⚙️ モデル取得が必要\n\n" +
-        "`ollama pull " + s.model + "` を実行 → 再読み込みで案内は消えます。";
-    els.results.innerHTML = '<div class="card"><div class="body"></div></div>';
-    els.results.querySelector(".body").innerHTML = renderMarkdown(md);
+    const guide = document.createElement("div");
+    guide.className = "card";
+    if (!s.running) {
+      guide.innerHTML = '<div class="body"></div>';
+      guide.querySelector(".body").innerHTML = renderMarkdown(
+        "### ⚙️ 初回セットアップ\n\n" +
+        "解説にはローカルLLM（Ollama）を使います。クラウド送信なし・APIキー不要。\n\n" +
+        "1. [Ollama をインストール](https://ollama.com/download)\n" +
+        "2. Ollama アプリを起動\n" +
+        "3. このページを再読み込み\n\n" +
+        "モデルのダウンロードはアプリが自動で行います。"
+      );
+    } else {
+      guide.innerHTML =
+        '<div class="body"></div>' +
+        '<div class="toolbar"><button class="pullBtn">📥 モデルをダウンロード（' + s.model + '）</button></div>';
+      guide.querySelector(".body").innerHTML = renderMarkdown(
+        "### ⚙️ モデルが必要です\n\n" +
+        "下のボタンを押すとダウンロードが始まります（初回のみ・約3GB）。"
+      );
+      guide.querySelector(".pullBtn").onclick = async (ev) => {
+        const btn = ev.target;
+        btn.disabled = true;
+        btn.textContent = "ダウンロード中…";
+        const body = guide.querySelector(".body");
+        try {
+          const resp = await fetch("/api/pull-model", { method: "POST" });
+          const reader = resp.body.getReader();
+          const dec = new TextDecoder();
+          let log = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            log += dec.decode(value, { stream: true });
+            body.textContent = log;
+          }
+          if (log.includes("✅")) {
+            setTimeout(() => location.reload(), 1500);
+          } else {
+            btn.disabled = false;
+            btn.textContent = "📥 再試行";
+          }
+        } catch (e) {
+          body.textContent = "⚠️ エラー: " + e.message;
+          btn.disabled = false;
+          btn.textContent = "📥 再試行";
+        }
+      };
+    }
+    els.results.prepend(guide);
   }
 
   function populate(s) {
@@ -309,7 +348,8 @@ async function openPdfBuffer(buf, name, id) {
   els.status.textContent = "読み込み中…";
   els.container.innerHTML = "";
   Bookmarks.load(id);
-  Ask.reset(); // 別の論文に切り替わるので質問の会話履歴をリセット
+  Conversations.load(id);
+  Ask.reset();
   const doc = await pdfjsLib.getDocument({ data: buf }).promise;
   if (token !== loadToken) {
     try { await doc.destroy(); } catch {}
@@ -326,7 +366,8 @@ async function openPdfBuffer(buf, name, id) {
   await Memo.openForPdf(id, name);
   if (token !== loadToken) return false;
   Bookmarks.renderMarkers();
-  Finder.refresh(); // 検索バーが開いていたら再ハイライト
+  Finder.refresh();
+  els.pdfPane.focus();
   return true;
 }
 
@@ -786,6 +827,81 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+/* ---------- 会話履歴の保存・復元 ---------- */
+const Conversations = (() => {
+  const MAX_ITEMS = 100;
+  let pdfId = null;
+  let items = []; // [{type, src, body}]
+  let saveTimer = null;
+
+  function persist() {
+    if (!pdfId) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      fetch("/api/conversations/" + pdfId, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      }).catch(() => {});
+    }, 500);
+  }
+
+  function push(type, src, body) {
+    if (body.startsWith("> ⚠️")) return;
+    items.push({ type, src, body });
+    if (items.length > MAX_ITEMS) items = items.slice(-MAX_ITEMS);
+    persist();
+  }
+
+  function renderCard(item) {
+    const card = document.createElement("div");
+    card.className = "card" + (item.type === "ask" ? " ask" : "");
+    card.innerHTML = `
+      <div class="src"></div>
+      <div class="body"></div>
+      <div class="toolbar"><button class="copyBtn">${
+        item.type === "ask" ? "コピー(質問+回答)" : "コピー(原文+解説)"
+      }</button></div>`;
+    card.querySelector(".src").textContent = item.src;
+    card.querySelector(".body").innerHTML = renderMarkdown(item.body);
+    card.querySelector(".copyBtn").onclick = (ev) => {
+      const prefix = item.type === "ask" ? `## Q\n${item.src}\n\n## A\n` : `> ${item.src}\n\n`;
+      navigator.clipboard.writeText(prefix + item.body);
+      ev.target.textContent = "コピーしました ✓";
+      setTimeout(() => {
+        ev.target.textContent = item.type === "ask" ? "コピー(質問+回答)" : "コピー(原文+解説)";
+      }, 1500);
+    };
+    return card;
+  }
+
+  async function load(id) {
+    pdfId = id;
+    items = [];
+    els.results.innerHTML = "";
+    try {
+      const r = await fetch("/api/conversations/" + id);
+      if (!r.ok) return;
+      const data = await r.json();
+      items = data.items || [];
+    } catch { return; }
+    if (!items.length) {
+      els.results.innerHTML = '<div class="empty">テキストを選択 → その場で日本語訳＋解説（ローカル）。<br />下の欄から論文の内容を質問（Gemini・論文全文を踏まえて回答）。</div>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (const item of items) frag.appendChild(renderCard(item));
+    els.results.appendChild(frag);
+  }
+
+  function reset() {
+    pdfId = null;
+    items = [];
+  }
+
+  return { load, push, reset };
+})();
+
 /* ---------- 解説リクエスト ---------- */
 async function explain(text, context) {
   const empty = els.results.querySelector(".empty");
@@ -799,8 +915,10 @@ async function explain(text, context) {
     <div class="toolbar"><button class="copyBtn">コピー(原文+解説)</button></div>`;
   card.querySelector(".src").textContent = text;
   const body = card.querySelector(".body");
+  body.textContent = "解説を生成中…";
+  body.classList.add("waiting");
   els.results.prepend(card);
-  els.sidePane.scrollTop = 0;
+  els.results.scrollTop = 0;
 
   let acc = "";
   try {
@@ -819,13 +937,16 @@ async function explain(text, context) {
       const { done, value } = await reader.read();
       if (done) break;
       acc += dec.decode(value, { stream: true });
+      body.classList.remove("waiting");
       body.innerHTML = renderMarkdown(acc);
-      els.sidePane.scrollTop = 0;
+      els.results.scrollTop = 0;
     }
   } catch (e) {
-    body.innerHTML = renderMarkdown(`> ⚠️ ${e.message}`);
+    acc = `> ⚠️ ${e.message}`;
+    body.innerHTML = renderMarkdown(acc);
   }
   card.classList.remove("loading");
+  if (acc) Conversations.push("explain", text, acc);
 
   card.querySelector(".copyBtn").onclick = (ev) => {
     navigator.clipboard.writeText(`> ${text}\n\n${acc}`);
@@ -924,6 +1045,8 @@ const Ask = (() => {
       (selection ? "「" + selection.replace(/\s+/g, " ").slice(0, 200) + "」\n\n" : "") +
       "Q: " + q;
     const body = card.querySelector(".body");
+    body.textContent = "回答を生成中…";
+    body.classList.add("waiting");
     els.results.prepend(card);
     els.results.scrollTop = 0;
 
@@ -944,6 +1067,7 @@ const Ask = (() => {
         const { done, value } = await reader.read();
         if (done) break;
         acc += dec.decode(value, { stream: true });
+        body.classList.remove("waiting");
         body.innerHTML = renderMarkdown(acc);
       }
       // 次の質問で文脈として送れるよう会話履歴に積む。
@@ -953,9 +1077,12 @@ const Ask = (() => {
       });
       history.push({ role: "model", text: acc });
     } catch (e) {
-      body.innerHTML = renderMarkdown(`> ⚠️ ${e.message}`);
+      acc = `> ⚠️ ${e.message}`;
+      body.innerHTML = renderMarkdown(acc);
     }
     card.classList.remove("loading");
+    const srcText = card.querySelector(".src").textContent;
+    if (acc) Conversations.push("ask", srcText, acc);
     card.querySelector(".copyBtn").onclick = (ev) => {
       navigator.clipboard.writeText(`## Q\n${q}\n\n## A\n${acc}`);
       ev.target.textContent = "コピーしました ✓";
@@ -974,6 +1101,14 @@ const Ask = (() => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
       submit();
+    }
+  });
+
+  // ⌘/ で質問欄にフォーカス
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+      e.preventDefault();
+      input.focus();
     }
   });
 
@@ -998,37 +1133,83 @@ document.addEventListener("mousemove", (e) => {
   els.sidePane.style.width = w + "px";
 });
 document.addEventListener("mouseup", () => {
+  if (!dragging) return;
   dragging = false;
   document.body.style.userSelect = "";
+  localStorage.setItem("sidePaneW", els.sidePane.style.width);
 });
+{
+  const savedW = localStorage.getItem("sidePaneW");
+  if (savedW) els.sidePane.style.width = savedW;
+}
 
 /* ---------- ブックマーク（任意の行に印をつけて行き来する） ---------- */
 // 位置は { pageIndex, y(0..1) } で持つので、ズームしても倍率に追従する。
 // PDF ごとに localStorage に保存（ローカル完結。PDFキャッシュと同じ思想）。
 const Bookmarks = (() => {
-  const KEY = (id) => `bookmarks_${id}`;
+  const KEY = (id) => `bookmarks_${id}`; // 旧localStorageキー（オフライン用バックアップ兼・移行元）
+  const API = (id) => `/api/bookmarks/${id}`;
   const NEAR = 0.02; // 同位置とみなす許容（ページ高比）
   const btn = document.getElementById("bookmarkBtn");
   let pdfId = null;
   let items = [];
 
   const cmp = (a, b) => a.pageIndex - b.pageIndex || a.y - b.y;
-
-  function load(id) {
-    pdfId = id;
+  const readLocal = (id) => {
     try {
-      items = JSON.parse(localStorage.getItem(KEY(id)) || "[]");
+      const a = JSON.parse(localStorage.getItem(KEY(id)) || "[]");
+      return Array.isArray(a) ? a : [];
     } catch {
-      items = [];
+      return [];
+    }
+  };
+
+  // サーバ(bookmarks/<id>.json)を正とする。未取得時は localStorage にフォールバックし、
+  // サーバが空で旧localStorageに残っていれば一度だけサーバへ移行する。
+  async function load(id) {
+    pdfId = id;
+    items = [];
+    updateBadge();
+    let serverItems = null;
+    try {
+      const r = await fetch(API(id));
+      if (r.ok) serverItems = (await r.json()).items || [];
+    } catch {
+      /* オフライン/サーバ不達 */
+    }
+    if (pdfId !== id) return; // 取得中に別PDFへ切り替わった
+    if (serverItems === null) {
+      items = readLocal(id); // サーバ不達 → ローカルバックアップ
+    } else if (serverItems.length === 0) {
+      const local = readLocal(id);
+      items = local;
+      if (local.length) persist(); // 旧ローカルしおりをサーバへ移行
+    } else {
+      items = serverItems;
+      try {
+        localStorage.setItem(KEY(id), JSON.stringify(items)); // オフライン用に控える
+      } catch {}
     }
     items.sort(cmp);
     updateBadge();
+    renderMarkers(); // fetch 完了後に確実に貼り直す（描画完了前に呼ばれていても）
   }
   function persist() {
-    if (pdfId) localStorage.setItem(KEY(pdfId), JSON.stringify(items));
+    if (!pdfId) return;
+    const id = pdfId;
+    try {
+      localStorage.setItem(KEY(id), JSON.stringify(items)); // オフライン用バックアップ
+    } catch {}
+    fetch(API(id), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    }).catch(() => flash("⚠️ しおりのサーバ保存に失敗（ローカルには保存済み）"));
   }
   function updateBadge() {
     if (btn) btn.textContent = `🔖 ${items.length}`;
+    const group = document.getElementById("bookmarkGroup");
+    if (group) group.classList.toggle("empty", items.length === 0);
   }
   function flash(msg) {
     els.status.textContent = msg;
@@ -1218,6 +1399,12 @@ const Bookmarks = (() => {
       else toggle();
     });
   }
+
+  // 前/次ナビボタン
+  const prevBtn = document.getElementById("bookmarkPrev");
+  const nextBtn = document.getElementById("bookmarkNext");
+  if (prevBtn) prevBtn.addEventListener("click", () => prev());
+  if (nextBtn) nextBtn.addEventListener("click", () => next());
 
   // ショートカット。入力欄にフォーカス中は誤爆を避ける。
   function isEditing(t) {
@@ -1502,10 +1689,78 @@ function handleListEnter(ta, ev) {
   }
 }
 
+// execCommand("insertText") で置換すると undo 履歴が保たれる。失敗時は value 直接書き換え。
+function replaceRange(ta, start, end, text) {
+  ta.setSelectionRange(start, end);
+  if (!document.execCommand("insertText", false, text)) {
+    const v = ta.value;
+    ta.value = v.slice(0, start) + text + v.slice(end);
+    fireInput(ta);
+  }
+}
+
+// ⌘/Ctrl+B: 選択を **太字** で囲む / 既に囲まれていれば外す。未選択なら **** を挿入して中へ。
+const BOLD = "**";
+function toggleBold(ta) {
+  const v = ta.value;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  if (s === e) {
+    replaceRange(ta, s, s, BOLD + BOLD);
+    ta.setSelectionRange(s + 2, s + 2);
+    return;
+  }
+  const sel = v.slice(s, e);
+  if (sel.length >= 4 && sel.startsWith(BOLD) && sel.endsWith(BOLD)) {
+    const inner = sel.slice(2, -2); // 選択ごと太字 → 中身だけに
+    replaceRange(ta, s, e, inner);
+    ta.setSelectionRange(s, s + inner.length);
+  } else if (v.slice(s - 2, s) === BOLD && v.slice(e, e + 2) === BOLD) {
+    replaceRange(ta, s - 2, e + 2, sel); // 選択の外側に ** → 外す
+    ta.setSelectionRange(s - 2, s - 2 + sel.length);
+  } else {
+    replaceRange(ta, s, e, BOLD + sel + BOLD); // 太字化
+    ta.setSelectionRange(s + 2, e + 2);
+  }
+}
+
+// ⌘/Ctrl+Shift+H: 行頭に "## " を付ける / 既に付いていれば外す（他レベルの見出しは ## に統一）。
+const HEADING_RE = /^(#{1,6})\s+/;
+const H2 = "## ";
+function toggleHeading(ta) {
+  const v = ta.value;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const { start, end } = lineRegion(v, s, e);
+  const lines = v.slice(start, end).split("\n");
+  const off = lines[0].startsWith(H2); // 先頭行が ## なら全行で解除、でなければ ## に揃える
+  let dFirst = 0, dTotal = 0;
+  const out = lines
+    .map((l, i) => {
+      const m = HEADING_RE.exec(l);
+      const nl = off
+        ? (m ? l.slice(m[0].length) : l)
+        : (m ? H2 + l.slice(m[0].length) : H2 + l);
+      const d = nl.length - l.length;
+      if (i === 0) dFirst = d;
+      dTotal += d;
+      return nl;
+    })
+    .join("\n");
+  replaceRange(ta, start, end, out);
+  const ns = Math.max(start, s + dFirst);
+  ta.setSelectionRange(ns, Math.max(ns, e + dTotal));
+}
+
 function attachListEditing(ta) {
   ta.addEventListener("keydown", (e) => {
     if (e.isComposing || e.keyCode === 229) return; // IME 変換中
-    if (e.key === "Tab") {
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.shiftKey && e.key.toLowerCase() === "h") {
+      e.preventDefault();
+      toggleHeading(ta);
+    } else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      toggleBold(ta);
+    } else if (e.key === "Tab") {
       e.preventDefault();
       e.shiftKey ? outdentSelection(ta) : indentSelection(ta);
     } else if (e.key === "Enter" && !e.shiftKey) {
@@ -1513,6 +1768,38 @@ function attachListEditing(ta) {
     }
   });
 }
+
+/* ---------- CodeMirror（メモ本文のリッチ編集）用のトグル ---------- */
+// ⌘/Ctrl+B 相当: 選択を **太字** で囲む / 既に囲まれていれば外す。未選択なら **** を挿入。
+function cmToggleBold(cm) {
+  if (cm.somethingSelected()) {
+    const sel = cm.getSelection();
+    if (sel.length >= 4 && sel.startsWith(BOLD) && sel.endsWith(BOLD)) {
+      cm.replaceSelection(sel.slice(2, -2), "around");
+    } else {
+      cm.replaceSelection(BOLD + sel + BOLD, "around");
+    }
+  } else {
+    const c = cm.getCursor();
+    cm.replaceRange(BOLD + BOLD, c);
+    cm.setCursor({ line: c.line, ch: c.ch + 2 });
+  }
+}
+// ⌘/Ctrl+Shift+H 相当: 選択行頭に "## " を付ける / 既にあれば外す（他レベルは ## に統一）。
+function cmToggleHeading(cm) {
+  const from = cm.getCursor("from"), to = cm.getCursor("to");
+  const off = H2_RE.test(cm.getLine(from.line)); // 先頭行が ## なら全行で解除
+  for (let l = from.line; l <= to.line; l++) {
+    const text = cm.getLine(l);
+    const m = HEADING_RE.exec(text);
+    const nl = off
+      ? (m ? text.slice(m[0].length) : text)
+      : (m ? H2 + text.slice(m[0].length) : H2 + text);
+    if (nl !== text)
+      cm.replaceRange(nl, { line: l, ch: 0 }, { line: l, ch: text.length });
+  }
+}
+const H2_RE = /^##\s/;
 
 const Memo = (() => {
   const $ = (id) => document.getElementById(id);
@@ -1546,7 +1833,23 @@ const Memo = (() => {
     ["next", "⑥ 次に読むべき論文は？", "関連文献・次に読む対象。"],
   ];
 
-  // summary タブの「質問 → メモ欄」ブロックを生成（key -> {ta, pv}）
+  // summary タブの「質問 → メモ欄」ブロックを生成（key -> {ta, pv, cm}）
+  const cmOpts = {
+    mode: { name: "markdown", fencedCodeBlockHighlighting: false },
+    lineWrapping: true,
+    indentUnit: 2,
+    tabSize: 2,
+    indentWithTabs: false,
+    extraKeys: {
+      Enter: "newlineAndIndentContinueMarkdownList",
+      Tab: (c) => c.execCommand("indentMore"),
+      "Shift-Tab": (c) => c.execCommand("indentLess"),
+      "Cmd-B": cmToggleBold,
+      "Ctrl-B": cmToggleBold,
+      "Shift-Cmd-H": cmToggleHeading,
+      "Shift-Ctrl-H": cmToggleHeading,
+    },
+  };
   const sumFields = {};
   for (const [key, q, ph] of SUMMARY_FIELDS) {
     const block = document.createElement("div");
@@ -1561,7 +1864,11 @@ const Memo = (() => {
     pv.hidden = true;
     block.append(label, ta, pv);
     summaryView.appendChild(block);
-    sumFields[key] = { ta, pv };
+    let scm = null;
+    if (window.CodeMirror) {
+      scm = CodeMirror.fromTextArea(ta, { ...cmOpts, placeholder: ph });
+    }
+    sumFields[key] = { ta, pv, cm: scm };
   }
   const eachSum = (fn) => SUMMARY_FIELDS.forEach(([k]) => fn(k, sumFields[k]));
 
@@ -1576,6 +1883,18 @@ const Memo = (() => {
   let saving = null;
   let preview = false;
   let tab = "memo"; // "memo" | "summary"
+  let cm = null; // メモ本文の CodeMirror（未ロード時は null → textarea にフォールバック）
+
+  // 本文の読み書きは cm 経由（CM 不使用時は textarea）。以降この2つだけを使う。
+  const getBody = () => (cm ? cm.getValue() : bodyEl.value);
+  const setBody = (v) => {
+    if (cm) cm.setValue(v || "");
+    else bodyEl.value = v || "";
+  };
+  const refreshCM = () => {
+    if (cm) requestAnimationFrame(() => cm.refresh());
+    eachSum((_, f) => { if (f.cm) requestAnimationFrame(() => f.cm.refresh()); });
+  };
 
   const stripExt = (n) => (n || "").replace(/\.pdf$/i, "");
   function fmtDate(iso) {
@@ -1590,31 +1909,48 @@ const Memo = (() => {
     panel.classList.toggle("open", open);
     toggle.classList.toggle("active", open);
     localStorage.setItem("memoOpen", open ? "1" : "0");
+    if (open) refreshCM(); // 非表示中に生成/更新された CM は表示時に測り直す
   }
   const setStatus = (t) => (statusEl.textContent = t);
   function setEditable(on) {
     titleEl.disabled = bodyEl.disabled = !on;
-    eachSum((_, f) => (f.ta.disabled = !on));
+    if (cm) {
+      cm.setOption("readOnly", on ? false : "nocursor");
+      cm.getWrapperElement().classList.toggle("cm-readonly", !on);
+    }
+    eachSum((_, f) => {
+      if (f.cm) {
+        f.cm.setOption("readOnly", on ? false : "nocursor");
+        f.cm.getWrapperElement().classList.toggle("cm-readonly", !on);
+      } else {
+        f.ta.disabled = !on;
+      }
+    });
     $("memoSaveBtn").disabled = $("memoDeleteBtn").disabled = !on;
   }
   const collectSummary = () => {
     const o = {};
-    eachSum((k, f) => (o[k] = f.ta.value));
+    eachSum((k, f) => (o[k] = f.cm ? f.cm.getValue() : f.ta.value));
     return o;
   };
   function fillSummary(s) {
     s = s || {};
-    eachSum((k, f) => (f.ta.value = s[k] || ""));
+    eachSum((k, f) => {
+      if (f.cm) f.cm.setValue(s[k] || "");
+      else f.ta.value = s[k] || "";
+    });
   }
 
   function load(note) {
     cur = { id: note.id, title: note.title || "", pdf: note.pdf || "" };
     titleEl.value = cur.title;
-    bodyEl.value = note.body || "";
+    setBody(note.body || "");
     fillSummary(note.summary);
     dirty = false;
     dirtyVersion++;
+    syncDirtyIndicator();
     setEditable(true);
+    refreshCM();
     if (preview) renderPreview();
     setStatus(note.updated ? "保存済み " + fmtDate(note.updated) : "新規メモ");
     emit("memo-opened", { id: cur.id });
@@ -1622,11 +1958,13 @@ const Memo = (() => {
   function blank(id, pdfName) {
     cur = { id, title: stripExt(pdfName), pdf: pdfName };
     titleEl.value = cur.title;
-    bodyEl.value = "";
+    setBody("");
     fillSummary(null);
     dirty = false;
     dirtyVersion++;
+    syncDirtyIndicator();
     setEditable(true);
+    refreshCM();
     if (preview) renderPreview();
     setStatus("新規メモ（入力すると自動保存）");
     emit("memo-opened", { id: cur.id });
@@ -1655,10 +1993,14 @@ const Memo = (() => {
     } catch {}
   }
 
+  function syncDirtyIndicator() {
+    toggle.classList.toggle("dirty", dirty);
+  }
   function markDirty() {
     if (!cur) return;
     dirty = true;
     dirtyVersion++;
+    syncDirtyIndicator();
     setStatus("編集中…");
     clearTimeout(saveTimer);
     saveTimer = setTimeout(save, 1200);
@@ -1673,7 +2015,7 @@ const Memo = (() => {
     const pdf = cur.pdf || null;
     const payload = {
       title: titleEl.value.trim() || "Untitled",
-      body: bodyEl.value,
+      body: getBody(),
       pdf,
       summary: collectSummary(),
     };
@@ -1690,6 +2032,7 @@ const Memo = (() => {
         if (cur && cur.id === id && dirtyVersion === version) {
           cur.title = d.title;
           dirty = false;
+          syncDirtyIndicator();
           setStatus("保存済み " + fmtDate(d.updated));
         }
         emit("memos-changed");
@@ -1711,22 +2054,27 @@ const Memo = (() => {
 
   function renderPreview() {
     previewEl.innerHTML = renderMarkdown(
-      bodyEl.value || "_（まだ何も書かれていません）_"
+      getBody() || "_（まだ何も書かれていません）_"
     );
     eachSum((_, f) => {
-      f.pv.innerHTML = f.ta.value.trim() ? renderMarkdown(f.ta.value) : "";
+      const v = f.cm ? f.cm.getValue() : f.ta.value;
+      f.pv.innerHTML = v.trim() ? renderMarkdown(v) : "";
     });
   }
   function setPreview(on) {
     preview = on;
-    bodyEl.hidden = on;
+    localStorage.setItem("memoPreview", on ? "1" : "0");
+    if (cm) cm.getWrapperElement().style.display = on ? "none" : "";
+    else bodyEl.hidden = on;
     previewEl.hidden = !on;
     eachSum((_, f) => {
-      f.ta.hidden = on;
+      if (f.cm) f.cm.getWrapperElement().style.display = on ? "none" : "";
+      else f.ta.hidden = on;
       f.pv.hidden = !on;
     });
     previewBtn.textContent = on ? "編集に戻る" : "プレビュー";
     if (on) renderPreview();
+    else refreshCM();
   }
   function setTab(name) {
     tab = name === "summary" ? "summary" : "memo";
@@ -1738,6 +2086,7 @@ const Memo = (() => {
     if (labelEl)
       labelEl.textContent = tab === "summary" ? "🧩 落合まとめ" : "📝 このメモ";
     localStorage.setItem("memoTab", tab);
+    if (tab === "memo") refreshCM(); // メモタブ表示時に CM を測り直す
   }
 
   toggle.onclick = () => setOpen(!panel.classList.contains("open"));
@@ -1746,11 +2095,36 @@ const Memo = (() => {
     b.onclick = () => setTab(b.dataset.tab);
   });
   titleEl.addEventListener("input", markDirty);
-  bodyEl.addEventListener("input", markDirty);
-  attachListEditing(bodyEl);
+  // メモ本文: CodeMirror があればリッチ編集、無ければ従来の textarea。
+  if (window.CodeMirror) {
+    cm = CodeMirror.fromTextArea(bodyEl, {
+      mode: { name: "markdown", fencedCodeBlockHighlighting: false },
+      lineWrapping: true,
+      indentUnit: 2,
+      tabSize: 2,
+      indentWithTabs: false,
+      placeholder: bodyEl.placeholder,
+      extraKeys: {
+        Enter: "newlineAndIndentContinueMarkdownList",
+        Tab: (c) => c.execCommand("indentMore"),
+        "Shift-Tab": (c) => c.execCommand("indentLess"),
+        "Cmd-B": cmToggleBold,
+        "Ctrl-B": cmToggleBold,
+        "Shift-Cmd-H": cmToggleHeading,
+        "Shift-Ctrl-H": cmToggleHeading,
+      },
+    });
+    cm.on("change", markDirty);
+  } else {
+    bodyEl.addEventListener("input", markDirty);
+    attachListEditing(bodyEl);
+  }
   eachSum((_, f) => {
-    f.ta.addEventListener("input", markDirty);
-    attachListEditing(f.ta);
+    if (f.cm) f.cm.on("change", markDirty);
+    else {
+      f.ta.addEventListener("input", markDirty);
+      attachListEditing(f.ta);
+    }
   });
   $("memoSaveBtn").onclick = save;
   previewBtn.onclick = () => setPreview(!preview);
@@ -1758,7 +2132,8 @@ const Memo = (() => {
     if (!cur || !confirm("このメモを削除しますか？")) return;
     await fetch("/api/notes/" + cur.id, { method: "DELETE" });
     cur = null;
-    titleEl.value = bodyEl.value = "";
+    titleEl.value = "";
+    setBody("");
     fillSummary(null);
     setEditable(false);
     setStatus("削除しました");
@@ -1800,6 +2175,7 @@ const Memo = (() => {
   if (savedH) panel.style.setProperty("--memo-h", savedH);
   setEditable(false);
   setTab(localStorage.getItem("memoTab") || "memo");
+  if (localStorage.getItem("memoPreview") === "1") setPreview(true);
   if (localStorage.getItem("memoOpen") === "1") setOpen(true);
 
   return { openForPdf, openExisting, setOpen, flush };

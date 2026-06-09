@@ -3,21 +3,43 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Paper Reader</title>
-<link rel="stylesheet" href="/style.css" />
+<title>Naruhodo</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<!-- メモ本文のリッチ編集（見出し・太字が編集中も大きく/太く表示される） -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/continuelist.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/display/placeholder.min.js"></script>
+<!-- アプリ独自CSSはベンダーCSSの後に置き、CodeMirror のテーマ色などを上書きできるようにする -->
+<link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <header id="topbar">
     <button id="listToggle" title="読んだ論文の一覧を開閉">☰ 一覧</button>
-    <strong class="brand">📄 Paper Reader</strong>
+    <strong class="brand">📄 Naruhodo</strong>
     <button id="openBtn">PDFを開く</button>
     <span id="fileName" class="muted">ファイル未選択</span>
-    <button id="bookmarkBtn" title="ブックマーク追加/削除 ⌘B　次へ F2　前へ Shift+F2　Shift+クリックで一覧">🔖 0</button>
+    <span id="bookmarkGroup">
+      <button id="bookmarkBtn" title="ブックマーク追加/削除 ⌘B　Shift+クリックで全削除">🔖 0</button>
+      <button id="bookmarkPrev" class="bm-nav" title="前のしおりへ Shift+F2">‹</button>
+      <button id="bookmarkNext" class="bm-nav" title="次のしおりへ F2">›</button>
+      <span id="bookmarkHelp" tabindex="0" role="button" aria-label="しおりのショートカット一覧">?
+        <span class="bm-help-popover" role="tooltip">
+          <b>🔖 しおりの操作</b>
+          <kbd>⌘/Ctrl + B</kbd><span>追加 / 削除</span>
+          <kbd>F2</kbd><span>次のしおりへ</span>
+          <kbd>Shift + F2</kbd><span>前のしおりへ</span>
+          <kbd>クリック</kbd><span>番号マーカーへジャンプ</span>
+          <kbd>Shift + クリック</kbd><span>マーカー/🔖で削除</span>
+        </span>
+      </span>
+    </span>
     <button id="memoToggle" title="メモパネルの開閉">📝 メモ</button>
     <span class="spacer"></span>
     <select id="modelSelect" title="解説に使うローカルLLMモデル" hidden></select>
@@ -36,10 +58,11 @@
       <ul id="listItems"></ul>
     </aside>
 
-    <div id="pdfPane">
+    <div id="pdfPane" tabindex="-1">
       <div id="pdfViewport">
         <div id="pdfContainer">
           <div id="dropHint">
+            <div class="drop-icon">📄</div>
             <p>PDFをここにドラッグ&ドロップ、または「PDFを開く」</p>
             <p class="muted">テキストを選択 → その場の「解説」ボタン（または ⌘/Ctrl+E）</p>
             <p class="muted">🔖 ブックマーク: ⌘/Ctrl+B で追加、F2 / Shift+F2 で次/前へジャンプ</p>
@@ -56,7 +79,7 @@
       <form id="askForm">
         <div id="askQuote" hidden></div>
         <div id="askRow">
-          <textarea id="askInput" rows="1" placeholder="この論文について質問（⌘/Ctrl+Enter で送信）。選択中なら引用付き。"></textarea>
+          <textarea id="askInput" rows="1" placeholder="この論文について質問（⌘/Ctrl+Enter で送信）。"></textarea>
           <button type="submit" id="askSend" title="Gemini に質問">質問</button>
         </div>
         <div id="askMeta" class="muted"></div>
@@ -72,8 +95,9 @@
       <span class="spacer"></span>
       <button id="memoPreviewBtn" title="編集 / プレビュー切替">プレビュー</button>
       <button id="memoSaveBtn">保存 ⌘S</button>
-      <button id="memoDeleteBtn" class="danger" title="このメモを削除">削除</button>
       <button id="memoClose" title="閉じる">×</button>
+      <span class="memo-sep"></span>
+      <button id="memoDeleteBtn" class="danger" title="このメモを削除">削除</button>
     </div>
 
     <div id="memoTabs">

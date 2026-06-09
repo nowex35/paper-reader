@@ -12,4 +12,11 @@ pdfs/
 # ユーザーの個人メモ（論文ごとのまとめ）はリポジトリに含めない
 notes/*.md
 !notes/.gitkeep
+
+# しおり（PDFごとのブックマーク位置）も個人データなので含めない
+bookmarks/*.json
+!bookmarks/.gitkeep
+
+# 会話履歴（解説・質問カード）も個人データ
+conversations/
 .DS_Store

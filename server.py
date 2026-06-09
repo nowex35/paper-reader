@@ -1,4 +1,4 @@
-"""Paper Reader — PDFを選択するとその場で日本語訳＋解説が出るローカルリーダー。
+"""Naruhodo — PDFを選択するとその場で日本語訳＋解説が出るローカルリーダー。
 
 起動:  uvicorn server:app --reload  (詳細は README.md)
 """
@@ -241,7 +241,7 @@ def stream_gemini(question: str, paper: str, selection: str | None,
             yield piece
 
 
-app = FastAPI(title="Paper Reader")
+app = FastAPI(title="Naruhodo")
 
 
 @app.middleware("http")
@@ -317,6 +317,34 @@ def set_model(req: ModelIn):
     if old and old != name:
         _unload_model(old)  # 旧モデルをメモリから解放（新モデルは次の解説時に load）
     return ollama_status()
+
+
+@app.post("/api/pull-model")
+def pull_model():
+    """現在のモデルを Ollama から pull する（未取得時にアプリ内から実行）。"""
+    import subprocess as _sp
+    import shutil as _sh
+    ollama = _sh.which("ollama")
+    if not ollama:
+        raise HTTPException(500, "ollama command not found")
+    model = CURRENT_MODEL
+
+    def gen():
+        yield f"モデル {model} をダウンロード中…\n"
+        try:
+            proc = _sp.Popen([ollama, "pull", model],
+                             stdout=_sp.PIPE, stderr=_sp.STDOUT, text=True)
+            for line in proc.stdout:
+                yield line
+            proc.wait()
+            if proc.returncode == 0:
+                yield "\n✅ ダウンロード完了！ページを再読み込みしてください。\n"
+            else:
+                yield f"\n⚠️ ダウンロード失敗（終了コード {proc.returncode}）\n"
+        except Exception as e:  # noqa: BLE001
+            yield f"\n⚠️ エラー: {e}\n"
+
+    return StreamingResponse(gen(), media_type="text/plain; charset=utf-8")
 
 
 @app.post("/api/explain")
@@ -557,8 +585,107 @@ def delete_note(nid: str):
     if not p:
         raise HTTPException(404, "note not found")
     p.unlink()
-    (PDF_DIR / f"{nid}.pdf").unlink(missing_ok=True)  # 紐づくPDFキャッシュも削除
+    (PDF_DIR / f"{nid}.pdf").unlink(missing_ok=True)
+    (BOOKMARKS_DIR / f"{nid}.json").unlink(missing_ok=True)
+    (CONV_DIR / f"{nid}.json").unlink(missing_ok=True)
     return {"ok": True}
+
+
+# ---------- しおり（PDFごとのブックマーク位置） ----------
+# 1 PDF = bookmarks/<id>.json。id は PDF 内容の SHA-256（notes と同じ）。
+# 位置は { pageIndex, y(0..1), t(任意のタイムスタンプ) } の配列で持つ。
+
+BOOKMARKS_DIR = BASE_DIR / "bookmarks"
+BOOKMARKS_DIR.mkdir(exist_ok=True)
+
+
+class BookmarkItem(BaseModel):
+    pageIndex: int
+    y: float
+    t: int | None = None
+
+
+class BookmarksIn(BaseModel):
+    items: list[BookmarkItem] = []
+
+
+def _bm_path(pid: str) -> Path:
+    if not _valid_id(pid):
+        raise HTTPException(400, "invalid id")
+    return BOOKMARKS_DIR / f"{pid}.json"
+
+
+@app.get("/api/bookmarks/{pid}")
+def get_bookmarks(pid: str):
+    path = _bm_path(pid)
+    if not path.exists():
+        return {"items": []}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {"items": []}
+    items = data.get("items", []) if isinstance(data, dict) else data
+    return {"items": items if isinstance(items, list) else []}
+
+
+@app.put("/api/bookmarks/{pid}")
+def put_bookmarks(pid: str, payload: BookmarksIn):
+    path = _bm_path(pid)
+    items = [it.model_dump(exclude_none=True) for it in payload.items]
+    if items:
+        path.write_text(json.dumps({"items": items}, ensure_ascii=False),
+                        encoding="utf-8")
+    else:
+        path.unlink(missing_ok=True)  # 空ならファイルごと削除
+    return {"ok": True, "count": len(items)}
+
+
+# ---------- 会話履歴（解説・質問カード） ----------
+# PDF ごとにサイドペインのカードを保存し、再度開いたときに復元する。
+
+CONV_DIR = BASE_DIR / "conversations"
+CONV_DIR.mkdir(exist_ok=True)
+
+
+class ConvItem(BaseModel):
+    type: str  # "explain" | "ask"
+    src: str
+    body: str
+
+
+class ConvIn(BaseModel):
+    items: list[ConvItem] = []
+
+
+def _conv_path(pid: str) -> Path:
+    if not _valid_id(pid):
+        raise HTTPException(400, "invalid id")
+    return CONV_DIR / f"{pid}.json"
+
+
+@app.get("/api/conversations/{pid}")
+def get_conversations(pid: str):
+    path = _conv_path(pid)
+    if not path.exists():
+        return {"items": []}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {"items": []}
+    items = data.get("items", []) if isinstance(data, dict) else []
+    return {"items": items if isinstance(items, list) else []}
+
+
+@app.put("/api/conversations/{pid}")
+def put_conversations(pid: str, payload: ConvIn):
+    path = _conv_path(pid)
+    items = [it.model_dump() for it in payload.items]
+    if items:
+        path.write_text(json.dumps({"items": items}, ensure_ascii=False),
+                        encoding="utf-8")
+    else:
+        path.unlink(missing_ok=True)
+    return {"ok": True, "count": len(items)}
 
 
 # ---------- PDF 本体のローカルキャッシュ ----------
