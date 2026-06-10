@@ -155,14 +155,55 @@ chmod +x "$APP/Contents/MacOS/naruhodo"
 
 # ---- ad-hoc 署名（Gatekeeper で即ブロックされるのを防ぐ） ----
 codesign --force --deep --sign - "$APP" 2>&1 || echo "⚠️ codesign スキップ（署名なしで続行）"
+# quarantine 属性を除去（DMG 経由でも Gatekeeper 警告を軽減）
+xattr -cr "$APP" 2>/dev/null || true
 
-# ---- DMG 作成 ----
-# Applications へのエイリアスを入れる（ドラッグ&ドロップ用）
+# ---- DMG 作成（背景画像＋アイコン配置付き） ----
 ln -s /Applications "$WORK/Applications"
 
-rm -f "$DMG"
-hdiutil create -volname "Naruhodo" -srcfolder "$WORK" -ov -format UDZO "$DMG" 2>&1
+mkdir -p "$WORK/.background"
+if [ -f "$SRCDIR/dmg-background.png" ]; then
+  cp "$SRCDIR/dmg-background.png" "$WORK/.background/bg.png"
+fi
 
+rm -f "$DMG"
+DMGRW="$SRCDIR/Naruhodo-rw.dmg"
+rm -f "$DMGRW"
+
+hdiutil create -volname "Naruhodo" -srcfolder "$WORK" -ov -format UDRW "$DMGRW" 2>&1
+
+MOUNT_DIR=$(hdiutil attach -readwrite -noverify "$DMGRW" | grep '/Volumes/' | awk '{print $NF}')
+if [ -n "$MOUNT_DIR" ]; then
+  osascript <<APPLESCRIPT
+    tell application "Finder"
+      tell disk "Naruhodo"
+        open
+        set current view of container window to icon view
+        set toolbar visible of container window to false
+        set statusbar visible of container window to false
+        set bounds of container window to {200, 120, 860, 520}
+        set opts to the icon view options of container window
+        set icon size of opts to 96
+        set arrangement of opts to not arranged
+        if exists file ".background:bg.png" then
+          set background picture of opts to file ".background:bg.png"
+        end if
+        set position of item "Naruhodo.app" of container window to {165, 200}
+        set position of item "Applications" of container window to {495, 200}
+        close
+        open
+        update without registering applications
+        delay 1
+        close
+      end tell
+    end tell
+APPLESCRIPT
+  sync
+  hdiutil detach "$MOUNT_DIR" 2>/dev/null
+fi
+
+hdiutil convert "$DMGRW" -format UDZO -o "$DMG" 2>&1
+rm -f "$DMGRW"
 rm -rf "$WORK"
 
 echo ""
