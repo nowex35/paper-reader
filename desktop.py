@@ -1,4 +1,4 @@
-"""Naruhodo Plus — デスクトップ起動ランチャ。
+"""Naruhodo — デスクトップ起動ランチャ。
 
 アプリアイコンから起動され、(1)ローディング画面を即表示、(2)Ollama を
 必要なら立ち上げ（未インストールなら自動インストール）、(3)モデルを必要
@@ -40,11 +40,6 @@ LOADING_HTML = """
   }
   .icon { font-size: 64px; }
   .title { font-size: 22px; font-weight: 700; }
-  .title .plus {
-    font-size: 12px; font-weight: 700; color: #fff;
-    background: linear-gradient(135deg, #7c3aed, #4f46e5);
-    padding: 2px 8px; border-radius: 5px; vertical-align: middle;
-  }
   #status {
     font-size: 14px; color: #6a6a70;
     min-height: 20px;
@@ -57,7 +52,7 @@ LOADING_HTML = """
   }
   #bar {
     height: 100%; width: 0%;
-    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    background: linear-gradient(90deg, #3b82f6, #1c6dff);
     border-radius: 3px;
     transition: width .4s ease;
   }
@@ -65,7 +60,7 @@ LOADING_HTML = """
 </head>
 <body>
   <div class="icon">📄</div>
-  <div class="title">Naruhodo <span class="plus">Plus</span></div>
+  <div class="title">Naruhodo</div>
   <div id="status">起動準備中…</div>
   <div class="bar-wrap"><div id="bar"></div></div>
 </body>
@@ -128,6 +123,40 @@ def _model_present(model: str) -> bool:
         return False
 
 
+def _pull_model_with_progress(window, model: str) -> None:
+    """Ollama の /api/pull を使い、ダウンロード進捗をローディング画面に反映する。"""
+    import http.client
+    conn = http.client.HTTPConnection("localhost", 11434, timeout=600)
+    body = json.dumps({"name": model}).encode()
+    conn.request("POST", "/api/pull", body=body,
+                 headers={"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    buf = b""
+    for chunk in iter(lambda: resp.read(1024), b""):
+        buf += chunk
+        while b"\n" in buf:
+            line, buf = buf.split(b"\n", 1)
+            if not line.strip():
+                continue
+            try:
+                obj = json.loads(line)
+            except (json.JSONDecodeError, ValueError):
+                continue
+            status = obj.get("status", "")
+            total = obj.get("total", 0)
+            completed = obj.get("completed", 0)
+            if total and completed:
+                pct = int(52 + (completed / total) * 16)
+                size_mb = completed / 1024 / 1024
+                total_mb = total / 1024 / 1024
+                msg = f"{status}（{size_mb:.0f}/{total_mb:.0f} MB）"
+            else:
+                pct = 52
+                msg = status or f"モデルをダウンロード中（{model}）…"
+            _update_loading(window, msg, min(pct, 68))
+    conn.close()
+
+
 PORT = _free_port()
 
 
@@ -185,26 +214,24 @@ def _boot(window) -> None:
 
     _update_loading(window, "モデルを確認中…", 50)
 
-    # 2. モデル確認・pull
+    # 2. モデル確認・pull（Ollama API で進捗を取得）
     if _ollama_up():
         model = _current_model()
         if not _model_present(model):
-            _update_loading(window, f"モデルをダウンロード中（{model}）…", 55)
-            ollama = shutil.which("ollama")
-            if ollama:
-                try:
-                    subprocess.run([ollama, "pull", model], check=True, timeout=600)
-                except Exception as e:  # noqa: BLE001
-                    print(f"[naruhodo] Model pull failed: {e}")
+            _update_loading(window, f"モデルをダウンロード中（{model}）…", 52)
+            try:
+                _pull_model_with_progress(window, model)
+            except Exception as e:  # noqa: BLE001
+                print(f"[naruhodo] Model pull failed: {e}")
 
-    _update_loading(window, "サーバーを起動中…", 70)
+    _update_loading(window, "アプリを起動中…", 70)
 
     # 3. サーバー起動・待機
     threading.Thread(target=_run_server, daemon=True).start()
     for i in range(80):
         if _server_up():
             break
-        _update_loading(window, "サーバーを起動中…", 70 + min(i, 25))
+        _update_loading(window, "アプリを起動中…", 70 + min(i, 25))
         time.sleep(0.25)
 
     _update_loading(window, "準備完了", 100)
@@ -219,7 +246,7 @@ def main() -> None:
     import webview
 
     window = webview.create_window(
-        "Naruhodo Plus",
+        "Naruhodo",
         html=LOADING_HTML,
         width=1440,
         height=900,

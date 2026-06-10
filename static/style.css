@@ -19,16 +19,6 @@ body {
   flex: none;
 }
 #topbar .brand { font-size: 15px; }
-.brand-plus {
-  font-size: 10px;
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  padding: 2px 6px;
-  border-radius: 4px;
-  vertical-align: middle;
-  letter-spacing: 0.5px;
-}
 #topbar .spacer { flex: 1; }
 .muted { color: #8a8a8e; font-size: 13px; }
 button {
@@ -40,6 +30,15 @@ button {
   cursor: pointer;
 }
 button:hover { background: #f0f0f3; }
+#listToggle {
+  background: none;
+  border: none;
+  font-size: 28px;
+  padding: 4px 8px;
+  color: #8a8a8e;
+}
+#listToggle:hover { color: #1c1c1e; background: none; }
+#listToggle.active { color: #1c1c1e; }
 #openBtn {
   background: #1c6dff;
   color: #fff;
@@ -59,7 +58,7 @@ button:hover { background: #f0f0f3; }
 }
 
 /* ---- layout ---- */
-#main { flex: 1; display: flex; min-height: 0; }
+#main { flex: 1; display: flex; min-height: 0; position: relative; }
 #pdfPane { flex: 1; overflow: auto; min-width: 280px; outline: none; }
 #sidePane {
   width: 420px;
@@ -282,6 +281,34 @@ button:hover { background: #f0f0f3; }
   100% { box-shadow: 0 1px 3px rgba(0,0,0,.25); transform: scale(1); }
 }
 
+.bookmark-guide {
+  position: absolute;
+  left: -22px;
+  width: 22px;
+  height: 20px;
+  margin-top: -10px;
+  background: #1c6dff;
+  opacity: 0.35;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  border-radius: 4px 0 0 4px;
+  pointer-events: none;
+  z-index: 2;
+}
+.bookmark-guide::after {
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: 0;
+  border: 10px solid transparent;
+  border-left-color: #1c6dff;
+  border-right-width: 0;
+  opacity: 0.35;
+}
+
 /* ---- find bar (⌘F ページ内検索) ---- */
 #findBar {
   position: fixed;
@@ -367,7 +394,19 @@ button:hover { background: #f0f0f3; }
   white-space: pre-wrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-.card .body { padding: 4px 14px 10px; font-size: 14px; line-height: 1.7; }
+.card .body {
+  padding: 4px 14px 10px;
+  font-size: 14px;
+  line-height: 1.7;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+.card .src {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
 .card .body h2 { font-size: 14px; margin: 14px 0 4px; color: #1c6dff; }
 .card .body p { margin: 6px 0; }
 .card .body ul { margin: 4px 0; padding-left: 20px; }
@@ -440,6 +479,102 @@ button:hover { background: #f0f0f3; }
 #askSend:hover { background: #0b59e6; }
 #askSend:disabled { background: #b9c8e6; cursor: default; }
 #askMeta { font-size: 11.5px; }
+/* ---- settings dialog ---- */
+#settingsDialog {
+  border: none;
+  border-radius: 12px;
+  padding: 0;
+  width: min(420px, 90vw);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+#settingsDialog::backdrop { background: rgba(0,0,0,0.3); }
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #ececef;
+}
+.settings-head strong { font-size: 15px; }
+.settings-head button {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #888;
+  padding: 0 4px;
+}
+.settings-body { padding: 18px; }
+.settings-section h3 {
+  font-size: 14px;
+  margin: 0 0 6px;
+}
+.settings-desc {
+  font-size: 12.5px;
+  color: #6a6a70;
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+.settings-body label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #444;
+  margin-bottom: 10px;
+}
+.settings-body select,
+.settings-body input[type="text"],
+.settings-body input[type="password"] {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid #d8d8dd;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+.settings-body input:focus { outline: 2px solid #1c6dff; outline-offset: -1px; }
+.settings-help {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6a6a70;
+}
+.settings-help summary {
+  cursor: pointer;
+  color: #1c6dff;
+  font-size: 12.5px;
+}
+.settings-help summary:hover { text-decoration: underline; }
+.settings-help ol {
+  margin: 8px 0;
+  padding-left: 20px;
+  line-height: 1.8;
+}
+.settings-help a { color: #1c6dff; }
+.settings-help p {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+.settings-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 18px;
+  border-top: 1px solid #ececef;
+}
+.settings-foot button {
+  background: #1c6dff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 18px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.settings-foot button:hover { background: #0b59e6; }
 
 /* ---- memo panel (下部トグル) ---- */
 #memoToggle.active { background: #1c6dff; color: #fff; border-color: #1c6dff; }
@@ -665,21 +800,26 @@ button.danger:hover { background: #fdecea; }
 .memoLabel { font-size: 13px; color: #444; }
 
 /* ---- 左サイドバー: 読んだ論文の一覧（ChatGPT風） ---- */
-#listToggle.active { background: #1c6dff; color: #fff; border-color: #1c6dff; }
 
 #listPane {
-  flex: none;
-  width: 280px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 300px;
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: #f7f7f8;
   border-right: 1px solid #dadade;
+  box-shadow: 4px 0 16px rgba(0,0,0,0.1);
+  z-index: 50;
+  transform: translateX(0);
+  transition: transform .18s ease;
   overflow: hidden;
-  transition: width .16s ease;
 }
 #listPane.collapsed {
-  width: 0;
-  border-right: 0;
+  transform: translateX(-100%);
+  box-shadow: none;
 }
 #listHead {
   display: flex;
@@ -766,3 +906,176 @@ button.danger:hover { background: #fdecea; }
   line-height: 1.7;
   padding: 18px 10px;
 }
+
+/* ---- welcome dialog ---- */
+#welcomeDialog {
+  border: none;
+  border-radius: 16px;
+  padding: 0;
+  width: min(440px, 90vw);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.2);
+  overflow: hidden;
+}
+#welcomeDialog::backdrop { background: rgba(0,0,0,0.35); }
+.welcome { padding: 32px 28px 24px; }
+.welcome-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.welcome-icon { font-size: 48px; display: block; margin-bottom: 8px; }
+.welcome-header h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+.welcome-sub {
+  font-size: 13px;
+  color: #6a6a70;
+  margin: 0;
+}
+.welcome-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.welcome-step {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.step-num {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  background: #1c6dff;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.welcome-step strong {
+  font-size: 14px;
+  display: block;
+  margin-bottom: 2px;
+}
+.welcome-step p {
+  font-size: 12.5px;
+  color: #555;
+  margin: 0;
+  line-height: 1.5;
+}
+.welcome-tip {
+  font-size: 12px;
+  color: #6a6a70;
+  text-align: center;
+  margin-bottom: 20px;
+}
+#welcomeStart {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  background: #1c6dff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+#welcomeStart:hover { background: #0b59e6; }
+
+/* ---- shortcuts popover ---- */
+#shortcutsHelp {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #8a8a8e;
+  border: 1px solid #c5c5ca;
+  border-radius: 50%;
+  cursor: default;
+  user-select: none;
+}
+#shortcutsHelp:hover { color: #1c1c1e; border-color: #999; }
+.sc-popover {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 8px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+  padding: 14px 18px;
+  width: 300px;
+  z-index: 200;
+  text-align: left;
+}
+#shortcutsHelp:hover .sc-popover { display: block; }
+.sc-popover b {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.sc-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+}
+.sc-grid kbd {
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, monospace;
+  background: #f0f0f3;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-align: right;
+  color: #444;
+  white-space: nowrap;
+}
+.sc-grid span {
+  font-size: 12.5px;
+  color: #1c1c1e;
+  padding: 2px 0;
+}
+
+/* ---- confirm dialog ---- */
+#confirmDialog {
+  border: none;
+  border-radius: 12px;
+  padding: 24px;
+  width: min(420px, 85vw);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+#confirmDialog::backdrop { background: rgba(0,0,0,0.3); }
+#confirmMsg {
+  margin: 0 0 20px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #1c1c1e;
+  word-break: break-all;
+}
+.confirm-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.confirm-buttons button {
+  padding: 7px 18px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+.confirm-buttons .danger {
+  background: #e53e3e;
+  color: #fff;
+  border-color: #e53e3e;
+}
+.confirm-buttons .danger:hover { background: #c53030; }

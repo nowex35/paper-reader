@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Naruhodo Plus</title>
+<title>Naruhodo</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -21,30 +21,114 @@
 </head>
 <body>
   <header id="topbar">
-    <button id="listToggle" title="読んだ論文の一覧を開閉">☰ 一覧</button>
-    <strong class="brand">📄 Naruhodo <span class="brand-plus">Plus</span></strong>
-    <button id="openBtn">PDFを開く</button>
+    <button id="listToggle" title="読んだ論文の一覧を開閉 ⌘B">☰</button>
+    <button id="openBtn">📂 PDFを開く</button>
     <span id="fileName" class="muted">ファイル未選択</span>
     <span id="bookmarkGroup">
-      <button id="bookmarkBtn" title="ブックマーク追加/削除 ⌘B　Shift+クリックで全削除">🔖 0</button>
-      <button id="bookmarkPrev" class="bm-nav" title="前のしおりへ Shift+F2">‹</button>
-      <button id="bookmarkNext" class="bm-nav" title="次のしおりへ F2">›</button>
+      <button id="bookmarkBtn" title="ブックマーク追加/削除 ⌘D">🔖 0</button>
+      <button id="bookmarkPrev" class="bm-nav" title="前のしおりへ ⌘⇧K">‹</button>
+      <button id="bookmarkNext" class="bm-nav" title="次のしおりへ ⌘⇧J">›</button>
       <span id="bookmarkHelp" tabindex="0" role="button" aria-label="しおりのショートカット一覧">?
         <span class="bm-help-popover" role="tooltip">
           <b>🔖 しおりの操作</b>
-          <kbd>⌘/Ctrl + B</kbd><span>追加 / 削除</span>
-          <kbd>F2</kbd><span>次のしおりへ</span>
-          <kbd>Shift + F2</kbd><span>前のしおりへ</span>
-          <kbd>クリック</kbd><span>番号マーカーへジャンプ</span>
-          <kbd>Shift + クリック</kbd><span>マーカー/🔖で削除</span>
+          <kbd>⌘D</kbd><span>追加 / 削除</span>
+          <kbd>⌘⇧J</kbd><span>次のしおりへ</span>
+          <kbd>⌘⇧K</kbd><span>前のしおりへ</span>
+          <kbd>クリック</kbd><span>マーカーを削除</span>
         </span>
       </span>
     </span>
-    <button id="memoToggle" title="メモパネルの開閉">📝 メモ</button>
+    <button id="memoToggle" title="メモパネルの開閉 ⌘M">📝 メモ</button>
     <span class="spacer"></span>
     <select id="modelSelect" title="解説に使うローカルLLMモデル" hidden></select>
     <span id="status" class="muted"></span>
+    <button id="settingsBtn" title="設定">⚙ 設定</button>
+    <span id="shortcutsHelp" aria-label="ショートカット一覧">?
+      <div class="sc-popover" role="tooltip">
+        <b>⌨ ショートカット</b>
+        <div class="sc-grid">
+          <kbd>⌘E</kbd><span>選択テキストを解説</span>
+          <kbd>⌘⏎</kbd><span>質問を送信</span>
+          <kbd>⌘/</kbd><span>質問欄にフォーカス</span>
+          <kbd>⌘D</kbd><span>しおり追加/削除</span>
+          <kbd>⌘⇧J</kbd><span>次のしおりへ</span>
+          <kbd>⌘⇧K</kbd><span>前のしおりへ</span>
+          <kbd>j/k</kbd><span>スクロール 下/上</span>
+          <kbd>h/l</kbd><span>スクロール 左/右</span>
+          <kbd>d/u</kbd><span>半ページ 下/上</span>
+          <kbd>←/→</kbd><span>前/次のページへ</span>
+          <kbd>⌘B</kbd><span>論文一覧の開閉</span>
+          <kbd>⌘M</kbd><span>メモパネルの開閉</span>
+          <kbd>⌘S</kbd><span>メモを保存</span>
+          <kbd>⌘F</kbd><span>ページ内検索</span>
+          <kbd>⌘+/-/0</kbd><span>ズーム</span>
+        </div>
+      </div>
+    </span>
   </header>
+
+  <dialog id="settingsDialog">
+    <div class="settings-head">
+      <strong>⚙️ 設定</strong>
+      <button id="settingsClose" title="閉じる">×</button>
+    </div>
+    <div class="settings-body">
+      <section class="settings-section">
+        <h3>質問機能</h3>
+        <p class="settings-desc">クラウドLLMのAPIキーを設定すると、論文全文を踏まえた質問ができるようになります。翻訳・解説は設定なしで使えます。</p>
+        <label>
+          プロバイダ
+          <select id="settingsProvider">
+            <option value="gemini">Google Gemini</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic (Claude)</option>
+          </select>
+        </label>
+        <label>
+          API キー
+          <input id="settingsApiKey" type="password" placeholder="未設定" autocomplete="off" />
+        </label>
+        <label>
+          モデル
+          <input id="settingsModel" type="text" placeholder="" />
+        </label>
+        <label id="settingsBaseUrlLabel" hidden>
+          ベースURL（カスタムエンドポイント）
+          <input id="settingsBaseUrl" type="text" placeholder="" />
+        </label>
+        <details class="settings-help">
+          <summary>APIキーの取得方法</summary>
+          <div id="helpGemini">
+            <p><strong>Google Gemini</strong></p>
+            <ol>
+              <li><a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> を開く</li>
+              <li>「APIキーを作成」→ コピーして上の欄に貼り付け → 保存</li>
+            </ol>
+            <p>無料枠で十分使えます。</p>
+          </div>
+          <div id="helpOpenai" hidden>
+            <p><strong>OpenAI</strong></p>
+            <ol>
+              <li><a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a> を開く</li>
+              <li>「Create new secret key」→ コピーして上の欄に貼り付け → 保存</li>
+            </ol>
+          </div>
+          <div id="helpAnthropic" hidden>
+            <p><strong>Anthropic (Claude)</strong></p>
+            <ol>
+              <li><a href="https://console.anthropic.com/settings/keys" target="_blank">Anthropic Console</a> を開く</li>
+              <li>「Create Key」→ コピーして上の欄に貼り付け → 保存</li>
+            </ol>
+          </div>
+          <p>キーはこの Mac 内にのみ保存され、選択したプロバイダの API への通信にのみ使用されます。</p>
+        </details>
+      </section>
+    </div>
+    <div class="settings-foot">
+      <span id="settingsStatus" class="muted"></span>
+      <button id="settingsSave">保存</button>
+    </div>
+  </dialog>
 
   <div id="main">
     <aside id="listPane">
@@ -65,7 +149,7 @@
             <div class="drop-icon">📄</div>
             <p>PDFをここにドラッグ&ドロップ、または「PDFを開く」</p>
             <p class="muted">テキストを選択 → その場の「解説」ボタン（または ⌘/Ctrl+E）</p>
-            <p class="muted">🔖 ブックマーク: ⌘/Ctrl+B で追加、F2 / Shift+F2 で次/前へジャンプ</p>
+            <p class="muted">🔖 ブックマーク: ⌘D で追加、⌘⇧J/K で次/前へジャンプ</p>
             <p class="muted">🔍 ページ内検索: ⌘/Ctrl+F、Enter で次・Shift+Enter で前・Esc で閉じる</p>
           </div>
         </div>
@@ -74,13 +158,13 @@
     <div id="resizer"></div>
     <div id="sidePane">
       <div id="results">
-        <div class="empty">テキストを選択 → その場で日本語訳＋解説（ローカル）。<br />下の欄から論文の内容を質問（Gemini・論文全文を踏まえて回答）。</div>
+        <div class="empty">テキストを選択 → その場で日本語訳＋解説（ローカル）。</div>
       </div>
-      <form id="askForm">
+      <form id="askForm" hidden>
         <div id="askQuote" hidden></div>
         <div id="askRow">
           <textarea id="askInput" rows="1" placeholder="この論文について質問（⌘/Ctrl+Enter で送信）。"></textarea>
-          <button type="submit" id="askSend" title="Gemini に質問">質問</button>
+          <button type="submit" id="askSend" title="質問を送信">質問</button>
         </div>
         <div id="askMeta" class="muted"></div>
       </form>
@@ -100,7 +184,7 @@
       <button id="memoDeleteBtn" class="danger" title="このメモを削除">削除</button>
     </div>
 
-    <div id="memoTabs">
+    <div id="memoTabs" hidden>
       <button class="memoTab active" data-tab="memo">📝 メモ</button>
       <button class="memoTab" data-tab="summary">🧩 summary</button>
     </div>
@@ -131,6 +215,56 @@
   </div>
 
   <input type="file" id="fileInput" accept="application/pdf" hidden />
+
+  <dialog id="welcomeDialog">
+    <div class="welcome">
+      <div class="welcome-header">
+        <span class="welcome-icon">📄</span>
+        <h2>Naruhodo へようこそ</h2>
+        <p class="welcome-sub">AI が読み解く、次世代の論文リーダー</p>
+      </div>
+      <div class="welcome-steps">
+        <div class="welcome-step">
+          <span class="step-num">1</span>
+          <div>
+            <strong>PDFを開く</strong>
+            <p>ドラッグ&ドロップ、または「📂 PDFを開く」ボタンから</p>
+          </div>
+        </div>
+        <div class="welcome-step">
+          <span class="step-num">2</span>
+          <div>
+            <strong>テキストを選択 → 解説</strong>
+            <p>気になる箇所をドラッグすると「解説」ボタンが出現。日本語訳・用語解説・要旨が表示されます</p>
+          </div>
+        </div>
+        <div class="welcome-step">
+          <span class="step-num">3</span>
+          <div>
+            <strong>しおり＆メモ</strong>
+            <p>⌘D でしおりを追加、⌘M でメモパネルを開いて自分の言葉でまとめられます</p>
+          </div>
+        </div>
+        <div class="welcome-step">
+          <span class="step-num">✨</span>
+          <div>
+            <strong>質問機能（オプション）</strong>
+            <p>⚙ 設定からAPIキーを登録すると、論文全文を踏まえた質問ができます</p>
+          </div>
+        </div>
+      </div>
+      <div class="welcome-tip">💡 <strong>?</strong> キーでショートカット一覧を表示できます</div>
+      <button id="welcomeStart">はじめる</button>
+    </div>
+  </dialog>
+
+  <dialog id="confirmDialog">
+    <p id="confirmMsg"></p>
+    <div class="confirm-buttons">
+      <button id="confirmCancel">キャンセル</button>
+      <button id="confirmOk" class="danger">削除</button>
+    </div>
+  </dialog>
 
   <script src="/app.js"></script>
 </body>

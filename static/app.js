@@ -1,5 +1,27 @@
 /* Naruhodo — PDF選択 → その場で日本語訳＋解説 */
 
+function appConfirm(msg) {
+  return new Promise((resolve) => {
+    const d = document.getElementById("confirmDialog");
+    const m = document.getElementById("confirmMsg");
+    const ok = document.getElementById("confirmOk");
+    const cancel = document.getElementById("confirmCancel");
+    if (!d) { resolve(confirm(msg)); return; }
+    m.textContent = msg;
+    function close(result) {
+      d.close();
+      ok.removeEventListener("click", onOk);
+      cancel.removeEventListener("click", onCancel);
+      resolve(result);
+    }
+    function onOk() { close(true); }
+    function onCancel() { close(false); }
+    ok.addEventListener("click", onOk);
+    cancel.addEventListener("click", onCancel);
+    d.showModal();
+  });
+}
+
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 marked.setOptions({ breaks: true });
@@ -350,7 +372,11 @@ async function openPdfBuffer(buf, name, id) {
   Bookmarks.load(id);
   Conversations.load(id);
   Ask.reset();
-  const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+  const doc = await pdfjsLib.getDocument({
+    data: buf,
+    cMapUrl: "https://unpkg.com/pdfjs-dist@3.11.174/cmaps/",
+    cMapPacked: true,
+  }).promise;
   if (token !== loadToken) {
     try { await doc.destroy(); } catch {}
     return false;
@@ -359,8 +385,11 @@ async function openPdfBuffer(buf, name, id) {
   zoom = 1;
   live = 1;
   els.pdfPane.scrollTop = 0;
-  localStorage.setItem("lastPdfId", id);
-  localStorage.setItem("lastPdfName", name);
+  fetch("/api/last-pdf", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, name }),
+  }).catch(() => {});
   const rendered = await renderAll();
   if (token !== loadToken || !rendered) return false;
   await Memo.openForPdf(id, name);
@@ -496,6 +525,47 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "0") { e.preventDefault(); liveZoom(1, ...c); }
   else if (e.key === "=" || e.key === "+") { e.preventDefault(); liveZoom(eff * 1.15, ...c); }
   else if (e.key === "-") { e.preventDefault(); liveZoom(eff / 1.15, ...c); }
+});
+
+/* ---------- vim 風スクロール (hjkl) ---------- */
+document.addEventListener("keydown", (e) => {
+  if (!pdfDoc || e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  const step = 60;
+  const page = els.pdfPane.clientHeight * 0.8;
+  switch (e.key) {
+    case "j": els.pdfPane.scrollTop += step; break;
+    case "k": els.pdfPane.scrollTop -= step; break;
+    case "h": els.pdfPane.scrollLeft -= step; break;
+    case "l": els.pdfPane.scrollLeft += step; break;
+    case "d": els.pdfPane.scrollTop += page; break;
+    case "u": els.pdfPane.scrollTop -= page; break;
+    case "ArrowLeft": {
+      const wraps = els.container.querySelectorAll(".pageWrap");
+      const pr = els.pdfPane.getBoundingClientRect();
+      for (let i = wraps.length - 1; i >= 0; i--) {
+        if (wraps[i].getBoundingClientRect().top < pr.top - 10) {
+          wraps[i].scrollIntoView({ behavior: "smooth", block: "start" });
+          break;
+        }
+      }
+      break;
+    }
+    case "ArrowRight": {
+      const wraps = els.container.querySelectorAll(".pageWrap");
+      const pr = els.pdfPane.getBoundingClientRect();
+      for (const w of wraps) {
+        if (w.getBoundingClientRect().top > pr.top + 10) {
+          w.scrollIntoView({ behavior: "smooth", block: "start" });
+          break;
+        }
+      }
+      break;
+    }
+    default: return;
+  }
+  e.preventDefault();
 });
 
 /* ---------- PDF テキスト選択（独自選択） ---------- */
@@ -766,7 +836,7 @@ const PdfSelection = (() => {
   }
 
   els.pdfPane.addEventListener("pointerdown", (e) => {
-    if (!pdfDoc || e.button !== 0 || e.target.closest("button,input,textarea,select")) return;
+    if (!pdfDoc || e.button !== 0 || e.target.closest("button,input,textarea,select,.bookmark-marker,.bookmark-guide")) return;
     const wrap = e.target.closest(".pageWrap");
     if (!wrap) return;
     window.getSelection()?.removeAllRanges();
@@ -886,7 +956,10 @@ const Conversations = (() => {
       items = data.items || [];
     } catch { return; }
     if (!items.length) {
-      els.results.innerHTML = '<div class="empty">テキストを選択 → その場で日本語訳＋解説（ローカル）。<br />下の欄から論文の内容を質問（Gemini・論文全文を踏まえて回答）。</div>';
+      const base = "テキストを選択 → その場で日本語訳＋解説（ローカル）。";
+      const askForm = document.getElementById("askForm");
+      const askHint = (askForm && !askForm.hidden) ? "<br />下の欄から論文の内容を質問（Gemini・論文全文を踏まえて回答）。" : "";
+      els.results.innerHTML = '<div class="empty">' + base + askHint + '</div>';
       return;
     }
     const frag = document.createDocumentFragment();
@@ -921,6 +994,9 @@ async function explain(text, context) {
   els.results.scrollTop = 0;
 
   let acc = "";
+  let pinTop = true;
+  const onScroll = () => { if (els.results.scrollTop > 10) pinTop = false; };
+  els.results.addEventListener("scroll", onScroll);
   try {
     const resp = await fetch("/api/explain", {
       method: "POST",
@@ -939,11 +1015,13 @@ async function explain(text, context) {
       acc += dec.decode(value, { stream: true });
       body.classList.remove("waiting");
       body.innerHTML = renderMarkdown(acc);
-      els.results.scrollTop = 0;
+      if (pinTop) els.results.scrollTop = 0;
     }
   } catch (e) {
     acc = `> ⚠️ ${e.message}`;
     body.innerHTML = renderMarkdown(acc);
+  } finally {
+    els.results.removeEventListener("scroll", onScroll);
   }
   card.classList.remove("loading");
   if (acc) Conversations.push("explain", text, acc);
@@ -1005,16 +1083,23 @@ const Ask = (() => {
   });
   quote.addEventListener("click", () => setQuote(""));
 
+  function setFormVisible(visible) {
+    form.hidden = !visible;
+  }
+
   async function checkStatus() {
     try {
       const r = await fetch("/api/ask-status");
       if (!r.ok) return;
       const s = await r.json();
-      meta.textContent = s.available
-        ? "質問: Gemini " + s.model
-        : s.sdk
-        ? "⚠️ 質問は未設定（.env に GEMINI_API_KEY）"
-        : "⚠️ 質問は未設定（pip install google-genai ＋ GEMINI_API_KEY）";
+      const NAMES = { gemini: "Gemini", openai: "OpenAI", anthropic: "Claude" };
+      if (s.available) {
+        setFormVisible(true);
+        meta.textContent = "質問: " + (NAMES[s.provider] || s.provider) + " " + s.model;
+      } else {
+        setFormVisible(false);
+        meta.textContent = "";
+      }
     } catch {}
   }
 
@@ -1051,6 +1136,9 @@ const Ask = (() => {
     els.results.scrollTop = 0;
 
     let acc = "";
+    let pinTop = true;
+    const onScroll = () => { if (els.results.scrollTop > 10) pinTop = false; };
+    els.results.addEventListener("scroll", onScroll);
     try {
       const resp = await fetch("/api/ask", {
         method: "POST",
@@ -1069,8 +1157,8 @@ const Ask = (() => {
         acc += dec.decode(value, { stream: true });
         body.classList.remove("waiting");
         body.innerHTML = renderMarkdown(acc);
+        if (pinTop) els.results.scrollTop = 0;
       }
-      // 次の質問で文脈として送れるよう会話履歴に積む。
       history.push({
         role: "user",
         text: (selection ? "（引用）" + selection + "\n" : "") + q,
@@ -1079,6 +1167,8 @@ const Ask = (() => {
     } catch (e) {
       acc = `> ⚠️ ${e.message}`;
       body.innerHTML = renderMarkdown(acc);
+    } finally {
+      els.results.removeEventListener("scroll", onScroll);
     }
     card.classList.remove("loading");
     const srcText = card.querySelector(".src").textContent;
@@ -1104,9 +1194,10 @@ const Ask = (() => {
     }
   });
 
-  // ⌘/ で質問欄にフォーカス
+  // ⌘/ で質問欄にフォーカス（Gemini 有効時のみ）
   document.addEventListener("keydown", (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+      if (form.hidden) return;
       e.preventDefault();
       input.focus();
     }
@@ -1118,7 +1209,7 @@ const Ask = (() => {
   }
 
   checkStatus();
-  return { reset };
+  return { reset, checkStatus };
 })();
 
 /* ---------- サイドペイン幅リサイズ ---------- */
@@ -1227,14 +1318,13 @@ const Bookmarks = (() => {
       if (!wrap) return;
       const m = document.createElement("div");
       m.className = "bookmark-marker";
-      m.title = `#${idx + 1} クリックでジャンプ / Shift+クリックで削除`;
+      m.title = `#${idx + 1} クリックで削除`;
       m.style.top = b.y * 100 + "%";
       m.textContent = String(idx + 1);
-      m.addEventListener("mousedown", (e) => e.stopPropagation()); // 選択開始を防ぐ
+      m.addEventListener("mousedown", (e) => e.stopPropagation());
       m.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (e.shiftKey) remove(idx);
-        else jumpTo(idx);
+        remove(idx);
       });
       wrap.appendChild(m);
     });
@@ -1330,9 +1420,9 @@ const Bookmarks = (() => {
     flash(`ブックマーク削除（残り ${items.length}）`);
   }
 
-  function clear() {
+  async function clear() {
     if (!items.length) return;
-    if (!confirm(`ブックマーク ${items.length} 件を全て削除しますか？`)) return;
+    if (!(await appConfirm(`ブックマーク ${items.length} 件を全て削除しますか？`))) return;
     items = [];
     persist();
     renderMarkers();
@@ -1392,12 +1482,33 @@ const Bookmarks = (() => {
     jumpTo(i);
   }
 
+  // ガイド矢印: しおり挿入位置を示す（マーカーと同じ形で薄く表示）
+  const guide = document.createElement("div");
+  guide.className = "bookmark-guide";
+  guide.textContent = "+";
+  guide.hidden = true;
+
+  function showGuide() {
+    if (!pdfDoc) return;
+    const loc = currentLocation();
+    if (!loc) return;
+    const wrap = pages()[loc.pageIndex];
+    if (!wrap) return;
+    guide.style.top = loc.y * 100 + "%";
+    guide.hidden = false;
+    if (guide.parentNode !== wrap) wrap.appendChild(guide);
+  }
+  function hideGuide() { guide.hidden = true; }
+
   // ボタン: クリックでトグル、Shift+クリックで全削除
   if (btn) {
     btn.addEventListener("click", (e) => {
+      hideGuide();
       if (e.shiftKey) clear();
       else toggle();
     });
+    btn.addEventListener("pointerenter", showGuide);
+    btn.addEventListener("pointerleave", hideGuide);
   }
 
   // 前/次ナビボタン
@@ -1414,15 +1525,18 @@ const Bookmarks = (() => {
     );
   }
   document.addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "b") {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "d") {
       if (isEditing(e.target)) return;
       e.preventDefault();
       toggle();
-    } else if (e.key === "F2") {
+    } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "j") {
       if (isEditing(e.target)) return;
       e.preventDefault();
-      if (e.shiftKey) prev();
-      else next();
+      next();
+    } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "k") {
+      if (isEditing(e.target)) return;
+      e.preventDefault();
+      prev();
     }
   });
 
@@ -1976,8 +2090,13 @@ const Memo = (() => {
     try {
       const r = await fetch("/api/notes/" + id);
       if (seq !== loadingSeq) return;
-      if (r.ok) load(await r.json());
-      else blank(id, pdfName);
+      if (r.ok) {
+        load(await r.json());
+      } else {
+        blank(id, pdfName);
+        dirty = true;
+        await save();
+      }
     } catch {
       if (seq === loadingSeq) blank(id, pdfName);
     }
@@ -2129,7 +2248,7 @@ const Memo = (() => {
   $("memoSaveBtn").onclick = save;
   previewBtn.onclick = () => setPreview(!preview);
   $("memoDeleteBtn").onclick = async () => {
-    if (!cur || !confirm("このメモを削除しますか？")) return;
+    if (!cur || !(await appConfirm("このメモを削除しますか？"))) return;
     await fetch("/api/notes/" + cur.id, { method: "DELETE" });
     cur = null;
     titleEl.value = "";
@@ -2144,6 +2263,10 @@ const Memo = (() => {
       e.preventDefault();
       if (!panel.classList.contains("open")) setOpen(true);
       save();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "m") {
+      e.preventDefault();
+      setOpen(!panel.classList.contains("open"));
     }
   });
 
@@ -2250,7 +2373,7 @@ const Memo = (() => {
       };
       li.querySelector(".li-del").onclick = async (e) => {
         e.stopPropagation();
-        if (!confirm(`「${n.title}」を削除しますか？`)) return;
+        if (!(await appConfirm(`「${n.title}」を削除しますか？\nメモ・しおり・会話履歴も消えます。`))) return;
         await fetch("/api/notes/" + n.id, { method: "DELETE" });
         await refresh();
       };
@@ -2272,6 +2395,15 @@ const Memo = (() => {
   if (collapse) collapse.onclick = () => setOpen(false);
   searchEl.addEventListener("input", render);
 
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "b") {
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      e.preventDefault();
+      setOpen(pane.classList.contains("collapsed"));
+    }
+  });
+
   document.addEventListener("memos-changed", refresh);
   document.addEventListener("memo-opened", (e) => {
     activeId = e.detail && e.detail.id;
@@ -2279,14 +2411,127 @@ const Memo = (() => {
     else render();
   });
 
-  setOpen(localStorage.getItem("listOpen") !== "0"); // 既定は開く
+  setOpen(false); // 既定は閉じる（オーバーレイなので）
   refresh();
+})();
+
+/* ---------- 設定ダイアログ ---------- */
+(() => {
+  const btn = document.getElementById("settingsBtn");
+  const dialog = document.getElementById("settingsDialog");
+  const closeBtn = document.getElementById("settingsClose");
+  const saveBtn = document.getElementById("settingsSave");
+  const statusEl = document.getElementById("settingsStatus");
+  const providerSel = document.getElementById("settingsProvider");
+  const keyInput = document.getElementById("settingsApiKey");
+  const modelInput = document.getElementById("settingsModel");
+  const baseUrlLabel = document.getElementById("settingsBaseUrlLabel");
+  const baseUrlInput = document.getElementById("settingsBaseUrl");
+  if (!dialog || !btn) return;
+
+  const DEFAULTS = {
+    gemini:    { model: "gemini-3.1-flash-lite", base_url: "" },
+    openai:    { model: "gpt-4o-mini",           base_url: "https://api.openai.com" },
+    anthropic: { model: "claude-sonnet-4-20250514", base_url: "" },
+  };
+  const HELP = { gemini: "helpGemini", openai: "helpOpenai", anthropic: "helpAnthropic" };
+
+  function updateUI(provider) {
+    const d = DEFAULTS[provider] || DEFAULTS.gemini;
+    modelInput.placeholder = d.model;
+    baseUrlLabel.hidden = provider !== "openai";
+    if (d.base_url) baseUrlInput.placeholder = d.base_url;
+    for (const [k, id] of Object.entries(HELP)) {
+      const el = document.getElementById(id);
+      if (el) el.hidden = k !== provider;
+    }
+  }
+
+  let serverProvider = "";
+
+  async function load() {
+    try {
+      const r = await fetch("/api/settings");
+      if (!r.ok) return;
+      const s = await r.json();
+      serverProvider = s.provider || "";
+      providerSel.value = s.provider || "gemini";
+      keyInput.value = "";
+      keyInput.placeholder = s.key_set ? "設定済み（変更する場合のみ入力）" : "未設定";
+      modelInput.value = s.model || "";
+      baseUrlInput.value = s.base_url || "";
+      updateUI(providerSel.value);
+      statusEl.textContent = "";
+    } catch {}
+  }
+
+  providerSel.addEventListener("change", () => updateUI(providerSel.value));
+
+  btn.onclick = () => { load(); dialog.showModal(); };
+  closeBtn.onclick = () => dialog.close();
+  dialog.addEventListener("click", (e) => {
+    if (e.target === dialog) dialog.close();
+  });
+
+  saveBtn.onclick = async () => {
+    const payload = {};
+    const pv = providerSel.value;
+    if (pv !== serverProvider) payload.provider = pv;
+    if (keyInput.value.trim()) payload.api_key = keyInput.value.trim();
+    const mv = modelInput.value.trim();
+    if (mv) payload.model = mv;
+    const bv = baseUrlInput.value.trim();
+    if (pv === "openai" && bv) payload.base_url = bv;
+    if (!Object.keys(payload).length) {
+      statusEl.textContent = "変更がありません";
+      return;
+    }
+    saveBtn.disabled = true;
+    statusEl.textContent = "保存中…";
+    try {
+      const r = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const s = await r.json();
+      serverProvider = s.provider || "";
+      statusEl.textContent = "保存しました";
+      keyInput.value = "";
+      keyInput.placeholder = s.key ? "設定済み（変更する場合のみ入力）" : "未設定";
+      if (s.model) modelInput.value = s.model;
+      if (typeof Ask !== "undefined" && Ask.checkStatus) Ask.checkStatus();
+    } catch (e) {
+      statusEl.textContent = "⚠️ 保存失敗: " + e.message;
+    }
+    saveBtn.disabled = false;
+  };
+})();
+
+/* ---------- ウェルカムガイド（初回のみ） ---------- */
+(async () => {
+  const dialog = document.getElementById("welcomeDialog");
+  const startBtn = document.getElementById("welcomeStart");
+  if (!dialog || !startBtn) return;
+  try {
+    const r = await fetch("/api/welcomed");
+    if (r.ok && (await r.json()).welcomed) return;
+  } catch { return; }
+  dialog.showModal();
+  startBtn.onclick = () => {
+    dialog.close();
+    fetch("/api/welcomed", { method: "POST" }).catch(() => {});
+  };
 })();
 
 /* ---------- 起動時: 最後に開いた PDF をキャッシュから自動復元 ---------- */
 (async () => {
-  const id = localStorage.getItem("lastPdfId");
-  if (!id) return;
-  const name = localStorage.getItem("lastPdfName") || "document.pdf";
-  await loadPdfFromCache(id, name); // 未キャッシュなら何もしない（drop hint のまま）
+  try {
+    const r = await fetch("/api/last-pdf");
+    if (!r.ok) return;
+    const { id, name } = await r.json();
+    if (!id) return;
+    await loadPdfFromCache(id, name || "document.pdf");
+  } catch {}
 })();
