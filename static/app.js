@@ -349,9 +349,7 @@ async function renderAll() {
   }
   natW = els.container.scrollWidth;
   natH = els.container.scrollHeight;
-  els.status.textContent =
-    `${pdfDoc.numPages} ページ` +
-    (zoom !== 1 ? ` · ${Math.round(zoom * 100)}%` : "");
+  els.status.textContent = zoom !== 1 ? `${Math.round(zoom * 100)}%` : "";
   return true;
 }
 
@@ -385,6 +383,7 @@ async function openPdfBuffer(buf, name, id) {
   zoom = 1;
   live = 1;
   els.pdfPane.scrollTop = 0;
+  if (typeof PageNav !== "undefined") PageNav.show(doc.numPages);
   fetch("/api/last-pdf", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -450,13 +449,16 @@ function liveZoom(targetEff, cxv, cyv) {
 
   els.container.style.width = natW + "px";
   els.container.style.transform = `scale(${live})`;
-  els.viewport.style.display = "block"; // 実寸スペーサとして機能させる
+  els.container.style.transformOrigin = "0 0";
+  els.viewport.style.display = "block";
   els.viewport.style.width = natW * live + "px";
   els.viewport.style.height = natH * live + "px";
 
-  const pane = els.pdfPane; // カーソル直下の点を固定
-  pane.scrollLeft = (pane.scrollLeft + cxv) * ratio - cxv;
-  pane.scrollTop = (pane.scrollTop + cyv) * ratio - cyv;
+  const pane = els.pdfPane;
+  const sl = pane.scrollLeft, st = pane.scrollTop;
+  const docX = sl + cxv, docY = st + cyv;
+  pane.scrollLeft = docX * ratio - cxv;
+  pane.scrollTop = docY * ratio - cyv;
   els.status.textContent = `ズーム ${Math.round(targetEff * 100)}%`;
 
   renderToken++; // 進行中の再描画を無効化
@@ -481,23 +483,19 @@ async function commitZoom() {
     nodes.push(node);
   }
 
-  // ここから await 無しの同期処理。旧→新を1フレームで入替え、
-  // 空白や先頭へのジャンプのフレームを発生させない。
   const pane = els.pdfPane;
   const keepL = pane.scrollLeft;
   const keepT = pane.scrollTop;
   zoom = eff;
-  els.fab.hidden = true; // 旧選択は消えるので解説ボタンも隠す
+  els.fab.hidden = true;
   els.container.replaceChildren(...nodes);
-  resetLive(); // transform / 固定幅 / viewport サイズを解除
-  applySpacing(zoom); // 余白も新倍率に比例（ライブ時の幾何と一致させる）
-  natW = els.container.scrollWidth; // 同期レイアウト
+  resetLive();
+  applySpacing(zoom);
+  natW = els.container.scrollWidth;
   natH = els.container.scrollHeight;
-  pane.scrollLeft = keepL; // 描画される前に復元 → ジャンプしない
+  pane.scrollLeft = keepL;
   pane.scrollTop = keepT;
-  els.status.textContent =
-    `${pdfDoc.numPages} ページ` +
-    (zoom !== 1 ? ` · ${Math.round(zoom * 100)}%` : "");
+  els.status.textContent = zoom !== 1 ? `${Math.round(zoom * 100)}%` : "";
   Bookmarks.renderMarkers(); // 再描画でマーカーDOMも消えるので貼り直し
   Finder.refresh(); // ハイライトも貼り直し
 }
@@ -527,6 +525,59 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "-") { e.preventDefault(); liveZoom(eff / 1.15, ...c); }
 });
 
+/* ---------- ページナビ ---------- */
+const PageNav = (() => {
+  const nav = document.getElementById("pageNav");
+  const input = document.getElementById("pageInput");
+  const total = document.getElementById("pageTotal");
+  if (!nav || !input || !total) return { show() {}, update() {} };
+
+  function show(numPages) {
+    input.max = numPages;
+    input.value = 1;
+    total.textContent = numPages;
+    nav.hidden = false;
+  }
+
+  function currentPage() {
+    const wraps = els.container.querySelectorAll(".pageWrap");
+    const pr = els.pdfPane.getBoundingClientRect();
+    const target = pr.top + pr.height * 0.3;
+    for (let i = wraps.length - 1; i >= 0; i--) {
+      if (wraps[i].getBoundingClientRect().top <= target) return i + 1;
+    }
+    return 1;
+  }
+
+  function update() {
+    if (nav.hidden || !pdfDoc) return;
+    const p = currentPage();
+    if (document.activeElement !== input) input.value = p;
+  }
+
+  function jumpTo(page) {
+    const wraps = els.container.querySelectorAll(".pageWrap");
+    const idx = Math.max(0, Math.min(page - 1, wraps.length - 1));
+    const wrap = wraps[idx];
+    if (!wrap) return;
+    const pr = els.pdfPane.getBoundingClientRect();
+    const wr = wrap.getBoundingClientRect();
+    els.pdfPane.scrollTop += wr.top - pr.top;
+  }
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      jumpTo(parseInt(input.value, 10) || 1);
+      els.pdfPane.focus();
+    }
+  });
+  input.addEventListener("blur", () => update());
+  els.pdfPane.addEventListener("scroll", () => update());
+
+  return { show, update, jumpTo, currentPage };
+})();
+
 /* ---------- PDF クリックでフォーカスを取る ---------- */
 els.pdfPane.addEventListener("pointerdown", () => {
   els.pdfPane.focus();
@@ -551,24 +602,16 @@ document.addEventListener("keydown", (e) => {
     case "d": els.pdfPane.scrollTop += page; break;
     case "u": els.pdfPane.scrollTop -= page; break;
     case "ArrowLeft": {
-      const wraps = els.container.querySelectorAll(".pageWrap");
-      const pr = els.pdfPane.getBoundingClientRect();
-      for (let i = wraps.length - 1; i >= 0; i--) {
-        if (wraps[i].getBoundingClientRect().top < pr.top - 10) {
-          wraps[i].scrollIntoView({ behavior: "smooth", block: "start" });
-          break;
-        }
+      if (typeof PageNav !== "undefined") {
+        const p = PageNav.currentPage();
+        if (p > 1) PageNav.jumpTo(p - 1);
       }
       break;
     }
     case "ArrowRight": {
-      const wraps = els.container.querySelectorAll(".pageWrap");
-      const pr = els.pdfPane.getBoundingClientRect();
-      for (const w of wraps) {
-        if (w.getBoundingClientRect().top > pr.top + 10) {
-          w.scrollIntoView({ behavior: "smooth", block: "start" });
-          break;
-        }
+      if (typeof PageNav !== "undefined" && pdfDoc) {
+        const p = PageNav.currentPage();
+        if (p < pdfDoc.numPages) PageNav.jumpTo(p + 1);
       }
       break;
     }
@@ -1469,11 +1512,11 @@ const Bookmarks = (() => {
     );
     if (i >= 0) {
       items.splice(i, 1);
-      flash(`ブックマーク削除（残り ${items.length}）`);
+      flash("");
     } else {
       items.push({ ...loc, t: Date.now() });
       items.sort(cmp);
-      flash(`ブックマーク追加（合計 ${items.length}）`);
+      flash("");
     }
     persist();
     renderMarkers();
@@ -1600,6 +1643,14 @@ const Bookmarks = (() => {
       e.preventDefault();
       next();
     } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "k") {
+      if (isEditing(e.target)) return;
+      e.preventDefault();
+      prev();
+    } else if (e.shiftKey && !e.metaKey && !e.ctrlKey && e.key === "ArrowRight") {
+      if (isEditing(e.target)) return;
+      e.preventDefault();
+      next();
+    } else if (e.shiftKey && !e.metaKey && !e.ctrlKey && e.key === "ArrowLeft") {
       if (isEditing(e.target)) return;
       e.preventDefault();
       prev();
@@ -2323,18 +2374,29 @@ const Memo = (() => {
     const exportClose = document.getElementById("exportClose");
     const exportPrint = document.getElementById("exportPrint");
 
-    exportBtn.onclick = () => {
+    let origTitle = "";
+
+    function openExport() {
       if (!cur || !exportDialog) return;
       const title = titleEl.value.trim() || "メモ";
       const body = getBody();
       const html = renderMarkdown(body || "_(メモは空です)_");
       const esc = title.replace(/&/g, "&amp;").replace(/</g, "&lt;");
       exportPreview.innerHTML = `<h1>${esc}</h1>${html}`;
+      origTitle = document.title;
+      document.title = title + "_メモ";
       exportDialog.showModal();
-    };
-    if (exportClose) exportClose.onclick = () => exportDialog.close();
+    }
+
+    function closeExport() {
+      exportDialog.close();
+      document.title = origTitle || "Naruhodo";
+    }
+
+    exportBtn.onclick = openExport;
+    if (exportClose) exportClose.onclick = closeExport;
     if (exportDialog) exportDialog.addEventListener("click", (e) => {
-      if (e.target === exportDialog) exportDialog.close();
+      if (e.target === exportDialog) closeExport();
     });
     if (exportPrint) exportPrint.onclick = () => window.print();
   }
@@ -2527,7 +2589,7 @@ const Memo = (() => {
 (() => {
   const btn = document.getElementById("layoutBtn");
   const LAYOUTS = ["standard", "columns"];
-  const LABELS = { standard: "⊞", columns: "☰" };
+  const LABELS = { standard: "⧉", columns: "⧉" };
   if (!btn) return;
 
   // A4縦 = 1:1.414, 16:9スライド = 1.778:1
@@ -2555,8 +2617,9 @@ const Memo = (() => {
 
   function apply(layout) {
     document.body.dataset.layout = layout;
-    btn.textContent = LABELS[layout] || "⊞";
+    btn.textContent = LABELS[layout] || "⧉";
     btn.title = layout === "standard" ? "3カラムに切替" : "標準に切替";
+    btn.classList.toggle("active", layout === "columns");
     const panel = document.getElementById("memoPanel");
     const memoResizer = document.getElementById("memoResizer");
 

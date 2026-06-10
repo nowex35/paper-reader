@@ -19,9 +19,13 @@
 </head>
 <body data-layout="standard">
   <header id="topbar" role="banner">
-    <button id="listToggle" aria-label="論文一覧の開閉" aria-expanded="false" title="論文一覧の開閉 ⌘B">☰</button>
+    <button id="listToggle" aria-label="論文一覧の開閉" aria-expanded="false" title="論文一覧の開閉 ⌘B">☷</button>
     <button id="openBtn">📂 PDFを開く</button>
     <span id="fileName" class="muted" aria-live="polite">ファイル未選択</span>
+    <span id="pageNav" hidden>
+      <input id="pageInput" type="number" min="1" aria-label="ページ番号" title="ページ番号を入力して Enter" />
+      <span class="muted">/ <span id="pageTotal">0</span></span>
+    </span>
     <span id="bookmarkGroup" role="group" aria-label="しおり">
       <button id="bookmarkBtn" aria-label="しおり追加/削除" title="しおり追加/削除 ⌘D">🔖 0</button>
       <button id="bookmarkPrev" class="bm-nav" aria-label="前のしおりへ" title="前のしおりへ ⌘⇧K">‹</button>
@@ -39,7 +43,7 @@
     <span class="spacer"></span>
     <select id="modelSelect" aria-label="解説に使うローカルLLMモデル" title="解説に使うローカルLLMモデル" hidden></select>
     <span id="status" class="muted" role="status" aria-live="polite"></span>
-    <button id="layoutBtn" aria-label="レイアウト切替" title="レイアウト切替">⊞</button>
+    <button id="layoutBtn" aria-label="レイアウト切替" title="レイアウト切替">⧉</button>
     <button id="settingsBtn" aria-label="設定を開く" title="設定">⚙ 設定</button>
     <span id="shortcutsHelp" aria-label="ショートカット一覧" role="button" tabindex="0">?
       <div class="sc-popover" role="tooltip" aria-label="キーボードショートカット一覧">
@@ -49,8 +53,8 @@
           <kbd>⌘⏎</kbd><span>質問を送信</span>
           <kbd>⌘/</kbd><span>質問欄にフォーカス</span>
           <kbd>⌘D</kbd><span>しおり追加/削除</span>
-          <kbd>⌘⇧J</kbd><span>次のしおりへ</span>
-          <kbd>⌘⇧K</kbd><span>前のしおりへ</span>
+          <kbd>⌘⇧J / Shift→</kbd><span>次のしおりへ</span>
+          <kbd>⌘⇧K / Shift←</kbd><span>前のしおりへ</span>
           <kbd>j/k</kbd><span>スクロール 下/上</span>
           <kbd>h/l</kbd><span>スクロール 左/右</span>
           <kbd>d/u</kbd><span>半ページ 下/上</span>
@@ -61,7 +65,7 @@
           <kbd>⌘S</kbd><span>メモを保存</span>
           <kbd>⌘F</kbd><span>ページ内検索</span>
           <kbd>⌘+/-/0</kbd><span>ズーム</span>
-          <kbd>⊞ ボタン</kbd><span>レイアウト切替</span>
+          <kbd>⧉ ボタン</kbd><span>レイアウト切替</span>
         </div>
       </div>
     </span>

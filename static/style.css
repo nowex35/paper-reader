@@ -1,5 +1,11 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
+::placeholder {
+  color: #c0c0c4;
+}
+.CodeMirror-placeholder {
+  color: #c0c0c4 !important;
+}
 :focus-visible {
   outline: 2px solid #1c6dff;
   outline-offset: 2px;
@@ -28,7 +34,8 @@ body {
   border-bottom: 1px solid #dadade;
   flex: none;
   flex-wrap: nowrap;
-  overflow: hidden;
+  position: relative;
+  z-index: 100;
 }
 #topbar .spacer { flex: 1; min-width: 4px; }
 #fileName {
@@ -48,6 +55,24 @@ button {
   cursor: pointer;
 }
 button:hover { background: #f0f0f3; }
+#pageNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+#pageInput {
+  width: 42px;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 13px;
+  text-align: center;
+  border: 1px solid #d8d8dd;
+  border-radius: 4px;
+  -moz-appearance: textfield;
+}
+#pageInput::-webkit-inner-spin-button,
+#pageInput::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 #listToggle {
   background: none;
   border: none;
@@ -77,12 +102,12 @@ button:hover { background: #f0f0f3; }
 
 /* ---- layout ---- */
 #main { flex: 1; display: flex; min-height: 0; position: relative; }
-#pdfPane { flex: 1; overflow: auto; min-width: 280px; outline: none; }
+#pdfPane { flex: 1; overflow: auto; min-width: 280px; outline: none; background: #f0f1f3; }
 #sidePane {
   width: 420px;
   min-width: 180px;
   flex: none;
-  background: #fafbfc;
+  background: #f0f1f3;
   border-left: 1px solid #dadade;
   display: flex;
   flex-direction: column;
@@ -519,6 +544,7 @@ button:hover { background: #f0f0f3; }
   color: #666;
 }
 #layoutBtn:hover { color: #1c1c1e; background: #f0f0f3; }
+#layoutBtn.active { background: #1c6dff; color: #fff; border-color: #1c6dff; }
 
 /* ---- settings dialog ---- */
 #settingsDialog {
@@ -1181,17 +1207,25 @@ button.danger:hover { background: #fdecea; }
 #exportPreview {
   flex: 1;
   overflow: auto;
-  padding: 24px 32px;
+  padding: 14px 24px;
   font-size: 14px;
-  line-height: 1.8;
+  line-height: 1.75;
 }
-#exportPreview h1 { font-size: 20px; border-bottom: 2px solid #1c6dff; padding-bottom: 8px; margin: 0 0 20px; }
-#exportPreview h2 { font-size: 16px; color: #1c6dff; margin-top: 24px; }
-#exportPreview h3 { font-size: 14px; }
-#exportPreview code { background: #f0f0f3; padding: 1px 4px; border-radius: 4px; font-size: 13px; }
-#exportPreview pre { background: #f6f6f8; padding: 12px; border-radius: 6px; overflow-x: auto; }
-#exportPreview blockquote { border-left: 3px solid #1c6dff; margin: 12px 0; padding: 4px 12px; color: #555; }
+#exportPreview code { background: #f0f0f3; padding: 1px 4px; border-radius: 4px; }
 #exportPreview ul, #exportPreview ol { padding-left: 20px; }
+#exportPreview :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 14px 0 6px;
+}
+#exportPreview h1 { font-size: 1.55em; }
+#exportPreview h2 { font-size: 1.3em; }
+#exportPreview h3 { font-size: 1.12em; }
+#exportPreview h4 { font-size: 1em; }
+#exportPreview h5, #exportPreview h6 { font-size: .92em; color: #6a6a70; }
+#exportPreview :is(h1, h2, h3, h4, h5, h6):first-child { margin-top: 2px; }
+#exportPreview blockquote { border-left: 3px solid #1c6dff; margin: 12px 0; padding: 4px 12px; color: #555; }
+#exportPreview pre { background: #f6f6f8; padding: 12px; border-radius: 6px; overflow-x: auto; }
 @media print {
   body > *:not(#exportDialog) { display: none !important; }
   #exportDialog { position: static; width: 100%; max-height: none; border: none; box-shadow: none; }
