@@ -257,7 +257,7 @@ function resetLive() {
 
 function pageScale(page, paneW) {
   const base = page.getViewport({ scale: 1 });
-  return Math.min(Math.max(paneW, 360), 900) / base.width;
+  return Math.min(Math.max(paneW, 360), 1200) / base.width;
 }
 
 // 1ページ分の要素を生成し描画まで完了させて返す（DOM未挿入でも可）
@@ -956,9 +956,9 @@ const Conversations = (() => {
       items = data.items || [];
     } catch { return; }
     if (!items.length) {
-      const base = "テキストを選択 → その場で日本語訳＋解説（ローカル）。";
+      const base = "テキストを選択して ⌘E で日本語訳＋解説";
       const askForm = document.getElementById("askForm");
-      const askHint = (askForm && !askForm.hidden) ? "<br />下の欄から論文の内容を質問（Gemini・論文全文を踏まえて回答）。" : "";
+      const askHint = (askForm && !askForm.hidden) ? "<br />下の欄から論文全文を踏まえた質問もできます。" : "";
       els.results.innerHTML = '<div class="empty">' + base + askHint + '</div>';
       return;
     }
@@ -1033,9 +1033,7 @@ async function explain(text, context) {
   };
 }
 
-/* ---------- 内容についての質問（Gemini・論文全文を文脈に） ---------- */
-// 翻訳(⌘E)はローカル Ollama・選択範囲のみ。こちらは論文全文＋会話履歴を Gemini に
-// 渡し「読んでいる文脈を踏まえた賢い回答」を得る。会話は PDF 単位（切替でリセット）。
+/* ---------- 内容についての質問（クラウドLLM・論文全文を文脈に） ---------- */
 
 // 全ページの抽出テキストを結合して論文全文を作る。renderPageNode が各 .pageWrap の
 // _pageText に保存済みなので、ここでは並べて繋ぐだけ。
@@ -1194,7 +1192,7 @@ const Ask = (() => {
     }
   });
 
-  // ⌘/ で質問欄にフォーカス（Gemini 有効時のみ）
+  // ⌘/ で質問欄にフォーカス（質問機能有効時のみ）
   document.addEventListener("keydown", (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "/") {
       if (form.hidden) return;
@@ -1214,16 +1212,18 @@ const Ask = (() => {
 
 /* ---------- サイドペイン幅リサイズ ---------- */
 let dragging = false;
-els.resizer.addEventListener("mousedown", () => {
+els.resizer.addEventListener("pointerdown", (e) => {
   dragging = true;
+  els.resizer.setPointerCapture(e.pointerId);
   document.body.style.userSelect = "none";
+  e.preventDefault();
 });
-document.addEventListener("mousemove", (e) => {
+document.addEventListener("pointermove", (e) => {
   if (!dragging) return;
   const w = Math.min(Math.max(window.innerWidth - e.clientX, 280), 720);
   els.sidePane.style.width = w + "px";
 });
-document.addEventListener("mouseup", () => {
+document.addEventListener("pointerup", () => {
   if (!dragging) return;
   dragging = false;
   document.body.style.userSelect = "";
@@ -1240,17 +1240,19 @@ document.addEventListener("mouseup", () => {
   const memoPanel = document.getElementById("memoPanel");
   if (!memoResizer || !memoPanel) return;
   let drag = false;
-  memoResizer.addEventListener("mousedown", () => {
+  memoResizer.addEventListener("pointerdown", (e) => {
     drag = true;
+    memoResizer.setPointerCapture(e.pointerId);
     document.body.style.userSelect = "none";
+    e.preventDefault();
   });
-  document.addEventListener("mousemove", (e) => {
+  document.addEventListener("pointermove", (e) => {
     if (!drag) return;
     const mainRect = document.getElementById("main").getBoundingClientRect();
     const w = Math.min(Math.max(e.clientX - mainRect.left, 200), 600);
     memoPanel.style.setProperty("--memo-col-w", w + "px");
   });
-  document.addEventListener("mouseup", () => {
+  document.addEventListener("pointerup", () => {
     if (!drag) return;
     drag = false;
     document.body.style.userSelect = "";
@@ -2063,7 +2065,8 @@ const Memo = (() => {
         f.ta.disabled = !on;
       }
     });
-    $("memoSaveBtn").disabled = $("memoDeleteBtn").disabled = !on;
+    const saveBtn = $("memoSaveBtn"); if (saveBtn) saveBtn.disabled = !on;
+    $("memoDeleteBtn").disabled = !on;
   }
   const collectSummary = () => {
     const o = {};
@@ -2268,7 +2271,7 @@ const Memo = (() => {
       attachListEditing(f.ta);
     }
   });
-  $("memoSaveBtn").onclick = save;
+  const memoSaveBtn = $("memoSaveBtn"); if (memoSaveBtn) memoSaveBtn.onclick = save;
   previewBtn.onclick = () => setPreview(!preview);
   $("memoDeleteBtn").onclick = async () => {
     if (!cur || !(await appConfirm("このメモを削除しますか？"))) return;
@@ -2398,6 +2401,15 @@ const Memo = (() => {
         e.stopPropagation();
         if (!(await appConfirm(`「${n.title}」を削除しますか？\nメモ・しおり・会話履歴も消えます。`))) return;
         await fetch("/api/notes/" + n.id, { method: "DELETE" });
+        if (n.id === activeId) {
+          pdfDoc = null;
+          els.container.innerHTML = '<div id="dropHint"><div class="drop-icon">📄</div><p>PDFをここにドラッグ&ドロップ、または「📂 PDFを開く」</p></div>';
+          els.fileName.textContent = "ファイル未選択";
+          els.fileName.classList.add("muted");
+          els.results.innerHTML = "";
+          els.status.textContent = "";
+          activeId = null;
+        }
         await refresh();
       };
       itemsEl.appendChild(li);
@@ -2417,6 +2429,12 @@ const Memo = (() => {
   toggle.onclick = () => setOpen(pane.classList.contains("collapsed"));
   if (collapse) collapse.onclick = () => setOpen(false);
   searchEl.addEventListener("input", render);
+
+  document.addEventListener("pointerdown", (e) => {
+    if (pane.classList.contains("collapsed")) return;
+    if (e.target.closest("#listPane, #listToggle")) return;
+    setOpen(false);
+  });
 
   document.addEventListener("keydown", (e) => {
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "b") {
@@ -2445,17 +2463,50 @@ const Memo = (() => {
   const LABELS = { standard: "⊞", columns: "☰" };
   if (!btn) return;
 
+  // A4縦 = 1:1.414, 16:9スライド = 1.778:1
+  const RATIO = { columns: 1 / 1.414, standard: 16 / 9 };
+  const RESIZER_W = 13; // memoResizer(5) + resizer(8)
+
+  function calcWidths(layout) {
+    const main = document.getElementById("main");
+    if (!main) return null;
+    const totalW = main.clientWidth;
+    const totalH = main.clientHeight;
+    const ratio = RATIO[layout] || RATIO.standard;
+    const pdfW = Math.round(Math.min(totalH * ratio, totalW * 0.6));
+
+    if (layout === "columns") {
+      const sideTotal = totalW - pdfW - RESIZER_W;
+      const memoW = Math.round(Math.max(200, Math.min(sideTotal * 0.48, 450)));
+      const aiW = Math.max(180, sideTotal - memoW);
+      return { memoW, aiW };
+    } else {
+      const aiW = Math.round(Math.max(280, Math.min(totalW - pdfW - 8, 520)));
+      return { aiW };
+    }
+  }
+
   function apply(layout) {
     document.body.dataset.layout = layout;
     btn.textContent = LABELS[layout] || "⊞";
     btn.title = layout === "standard" ? "3カラムに切替" : "標準に切替";
     const panel = document.getElementById("memoPanel");
     const memoResizer = document.getElementById("memoResizer");
+
     if (layout === "columns") {
       if (panel) panel.classList.add("open");
       if (memoResizer) memoResizer.hidden = false;
     } else {
       if (memoResizer) memoResizer.hidden = true;
+    }
+
+    const w = calcWidths(layout);
+    if (!w) return;
+    if (layout === "columns" && panel) {
+      panel.style.setProperty("--memo-col-w", w.memoW + "px");
+    }
+    if (w.aiW) {
+      els.sidePane.style.width = w.aiW + "px";
     }
   }
 
@@ -2574,6 +2625,62 @@ const Memo = (() => {
     }
     saveBtn.disabled = false;
   };
+})();
+
+/* ---------- 文字サイズ設定 ---------- */
+(() => {
+  const SLIDERS = [
+    { range: "memoSizeRange", val: "memoSizeVal", prop: "--memo-font-size", def: 14 },
+    { range: "aiSizeRange",   val: "aiSizeVal",   prop: "--ai-font-size",   def: 14 },
+    { range: "askSizeRange",  val: "askSizeVal",  prop: "--ask-font-size",  def: 13.5 },
+  ];
+  let saveTimer = null;
+
+  function applyAll(sizes) {
+    for (const s of SLIDERS) {
+      const v = sizes[s.prop] ?? s.def;
+      document.documentElement.style.setProperty(s.prop, v + "px");
+      const rangeEl = document.getElementById(s.range);
+      const valEl = document.getElementById(s.val);
+      if (rangeEl) rangeEl.value = v;
+      if (valEl) valEl.textContent = v;
+    }
+  }
+
+  function persist() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const data = {};
+      for (const s of SLIDERS) {
+        const rangeEl = document.getElementById(s.range);
+        if (rangeEl) data[s.prop] = parseFloat(rangeEl.value);
+      }
+      fetch("/api/font-sizes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).catch(() => {});
+    }, 500);
+  }
+
+  for (const s of SLIDERS) {
+    const rangeEl = document.getElementById(s.range);
+    const valEl = document.getElementById(s.val);
+    if (!rangeEl) continue;
+    rangeEl.addEventListener("input", () => {
+      const v = parseFloat(rangeEl.value);
+      if (valEl) valEl.textContent = v;
+      document.documentElement.style.setProperty(s.prop, v + "px");
+      persist();
+    });
+  }
+
+  (async () => {
+    try {
+      const r = await fetch("/api/font-sizes");
+      if (r.ok) applyAll(await r.json());
+    } catch {}
+  })();
 })();
 
 /* ---------- ウェルカムガイド（初回のみ） ---------- */

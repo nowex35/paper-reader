@@ -30,11 +30,10 @@
       <button id="bookmarkNext" class="bm-nav" title="次のしおりへ ⌘⇧J">›</button>
       <span id="bookmarkHelp" tabindex="0" role="button" aria-label="しおりのショートカット一覧">?
         <span class="bm-help-popover" role="tooltip">
-          <b>🔖 しおりの操作</b>
+          <b>🔖 しおり</b>
           <kbd>⌘D</kbd><span>追加 / 削除</span>
-          <kbd>⌘⇧J</kbd><span>次のしおりへ</span>
-          <kbd>⌘⇧K</kbd><span>前のしおりへ</span>
-          <kbd>クリック</kbd><span>マーカーを削除</span>
+          <kbd>⌘⇧J/K</kbd><span>次 / 前へ移動</span>
+          <kbd>マーカークリック</kbd><span>削除</span>
         </span>
       </span>
     </span>
@@ -125,6 +124,21 @@
           <p>キーはこの Mac 内にのみ保存され、選択したプロバイダの API への通信にのみ使用されます。</p>
         </details>
       </section>
+      <section class="settings-section">
+        <h3>文字サイズ</h3>
+        <label class="size-slider">
+          メモ <span id="memoSizeVal">14</span>px
+          <input id="memoSizeRange" type="range" min="10" max="22" step="1" value="14" />
+        </label>
+        <label class="size-slider">
+          AI 応答 <span id="aiSizeVal">14</span>px
+          <input id="aiSizeRange" type="range" min="10" max="22" step="1" value="14" />
+        </label>
+        <label class="size-slider">
+          質問欄 <span id="askSizeVal">13.5</span>px
+          <input id="askSizeRange" type="range" min="10" max="22" step="0.5" value="13.5" />
+        </label>
+      </section>
     </div>
     <div class="settings-foot">
       <span id="settingsStatus" class="muted"></span>
@@ -151,7 +165,6 @@
         <span id="memoStatus" class="muted"></span>
         <span class="spacer"></span>
         <button id="memoPreviewBtn" title="編集 / プレビュー切替">プレビュー</button>
-        <button id="memoSaveBtn">保存 ⌘S</button>
         <button id="memoClose" title="閉じる">×</button>
         <span class="memo-sep"></span>
         <button id="memoDeleteBtn" class="danger" title="このメモを削除">削除</button>
@@ -178,10 +191,9 @@
         <div id="pdfContainer">
           <div id="dropHint">
             <div class="drop-icon">📄</div>
-            <p>PDFをここにドラッグ&ドロップ、または「PDFを開く」</p>
-            <p class="muted">テキストを選択 → その場の「解説」ボタン（または ⌘/Ctrl+E）</p>
-            <p class="muted">🔖 ブックマーク: ⌘D で追加、⌘⇧J/K で次/前へジャンプ</p>
-            <p class="muted">🔍 ページ内検索: ⌘/Ctrl+F、Enter で次・Shift+Enter で前・Esc で閉じる</p>
+            <p>PDFをここにドラッグ&ドロップ、または「📂 PDFを開く」</p>
+            <p class="muted">テキストを選択 → ⌘E で日本語訳＋解説</p>
+            <p class="muted">🔖 ⌘D しおり追加　←/→ ページ送り　? ショートカット一覧</p>
           </div>
         </div>
       </div>
@@ -189,12 +201,12 @@
     <div id="resizer"></div>
     <div id="sidePane">
       <div id="results">
-        <div class="empty">テキストを選択 → その場で日本語訳＋解説（ローカル）。</div>
+        <div class="empty">テキストを選択して ⌘E で日本語訳＋解説</div>
       </div>
       <form id="askForm" hidden>
         <div id="askQuote" hidden></div>
         <div id="askRow">
-          <textarea id="askInput" rows="1" placeholder="この論文について質問（⌘/Ctrl+Enter で送信）。"></textarea>
+          <textarea id="askInput" rows="1" placeholder="この論文について質問（⌘+Enter で送信）"></textarea>
           <button type="submit" id="askSend" title="質問を送信">質問</button>
         </div>
         <div id="askMeta" class="muted"></div>
@@ -226,32 +238,32 @@
           <span class="step-num">1</span>
           <div>
             <strong>PDFを開く</strong>
-            <p>ドラッグ&ドロップ、または「📂 PDFを開く」ボタンから</p>
+            <p>ドラッグ&ドロップ、または「📂 PDFを開く」から。日本語・英語どちらも対応</p>
           </div>
         </div>
         <div class="welcome-step">
           <span class="step-num">2</span>
           <div>
-            <strong>テキストを選択 → 解説</strong>
-            <p>気になる箇所をドラッグすると「解説」ボタンが出現。日本語訳・用語解説・要旨が表示されます</p>
+            <strong>テキストを選択 → 解説（⌘E）</strong>
+            <p>気になる箇所をドラッグ。日本語訳・用語解説・「要するにどういうことか」が表示されます</p>
           </div>
         </div>
         <div class="welcome-step">
           <span class="step-num">3</span>
           <div>
-            <strong>しおり＆メモ</strong>
-            <p>⌘D でしおりを追加、⌘M でメモパネルを開いて自分の言葉でまとめられます</p>
+            <strong>しおり・メモ・レイアウト</strong>
+            <p>⌘D しおり追加、⌘M メモ、⊞ ボタンで標準/3カラム切替。←/→ でページ送り</p>
           </div>
         </div>
         <div class="welcome-step">
           <span class="step-num">✨</span>
           <div>
-            <strong>質問機能（オプション）</strong>
-            <p>⚙ 設定からAPIキーを登録すると、論文全文を踏まえた質問ができます</p>
+            <strong>論文に質問（オプション）</strong>
+            <p>⚙ 設定からAPIキー（Gemini/OpenAI/Claude）を登録すると、論文全文を踏まえた質問ができます</p>
           </div>
         </div>
       </div>
-      <div class="welcome-tip">💡 <strong>?</strong> キーでショートカット一覧を表示できます</div>
+      <div class="welcome-tip">💡 ヘッダー右端の <strong>?</strong> にカーソルを乗せるとショートカット一覧</div>
       <button id="welcomeStart">はじめる</button>
     </div>
   </dialog>

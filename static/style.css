@@ -79,7 +79,7 @@ button:hover { background: #f0f0f3; }
   min-height: 0;
 }
 #resizer {
-  width: 8px;
+  width: 10px;
   cursor: col-resize;
   background: #e3e3e7;
   flex: none;
@@ -405,7 +405,7 @@ button:hover { background: #f0f0f3; }
 }
 .card .body {
   padding: 4px 14px 10px;
-  font-size: 14px;
+  font-size: var(--ai-font-size, 14px);
   line-height: 1.7;
   -webkit-user-select: text;
   user-select: text;
@@ -467,7 +467,7 @@ button:hover { background: #f0f0f3; }
 #askInput {
   flex: 1;
   font: inherit;
-  font-size: 13.5px;
+  font-size: var(--ask-font-size, 13.5px);
   line-height: 1.5;
   padding: 8px 10px;
   border: 1px solid #d8d8dd;
@@ -571,6 +571,17 @@ button:hover { background: #f0f0f3; }
   margin-top: 4px;
   font-size: 12px;
   color: #6a6a70;
+}
+.size-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.size-slider input[type="range"] {
+  flex: 1;
+  margin: 0;
 }
 .settings-help summary {
   cursor: pointer;
@@ -680,9 +691,9 @@ button.danger:hover { background: #fdecea; }
 [data-layout="columns"] #memoResizer { display: block !important; }
 .col-resizer {
   flex: none;
-  width: 5px;
+  width: 10px;
   cursor: col-resize;
-  background: #dadade;
+  background: #e3e3e7;
 }
 .col-resizer:hover { background: #b9b9c0; }
 #memoDrag {
@@ -800,7 +811,7 @@ button.danger:hover { background: #fdecea; }
   flex: 1;
   min-height: 80px;
   resize: none;
-  font: 13.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: var(--memo-font-size, 13.5px)/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
   padding: 10px 12px;
   border: 1px solid #d8d8dd;
   border-radius: 7px;
@@ -816,7 +827,7 @@ button.danger:hover { background: #fdecea; }
   border: 1px solid #d8d8dd;
   border-radius: 7px;
   background: #fff;
-  font: 13.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: var(--memo-font-size, 13.5px)/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #1d1d1f;
 }
 #memoMemoView .CodeMirror-scroll { padding: 6px 14px; }
