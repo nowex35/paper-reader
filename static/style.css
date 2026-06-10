@@ -628,6 +628,15 @@ button:hover { background: #f0f0f3; }
   padding: 12px 18px;
   border-top: 1px solid #ececef;
 }
+.settings-reset-btn {
+  background: none !important;
+  border: none !important;
+  color: #8a8a8e;
+  font-size: 12px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.settings-reset-btn:hover { color: #e53e3e; }
 .settings-foot button {
   background: #1c6dff;
   color: #fff;
@@ -742,15 +751,23 @@ button.danger:hover { background: #fdecea; }
 #memoHead {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 6px 12px;
   border-bottom: 1px solid #ececef;
   flex: none;
+  flex-wrap: nowrap;
 }
-#memoHead .spacer { flex: 1; }
-#memoHead button { padding: 4px 10px; font-size: 12.5px; }
-#memoHead #memoClose { padding: 2px 9px; font-size: 15px; line-height: 1; }
-.memo-sep { width: 1px; height: 18px; background: #dadade; margin: 0 4px; }
+#memoHead .spacer { flex: 1; min-width: 4px; }
+#memoHead button { padding: 4px 8px; font-size: 12px; white-space: nowrap; }
+#memoHead #memoClose { padding: 2px 8px; font-size: 15px; line-height: 1; }
+.memo-sep { width: 1px; height: 18px; background: #dadade; margin: 0 2px; }
+#memoStatusBar {
+  flex: none;
+  padding: 2px 12px;
+  font-size: 11.5px;
+  border-bottom: 1px solid #ececef;
+  min-height: 18px;
+}
 
 /* ---- memo / summary タブ ---- */
 #memoTabs {
@@ -1145,6 +1162,41 @@ button.danger:hover { background: #fdecea; }
   font-size: 12.5px;
   color: #1c1c1e;
   padding: 2px 0;
+}
+
+/* ---- export dialog ---- */
+#exportDialog {
+  border: none;
+  border-radius: 12px;
+  padding: 0;
+  width: min(640px, 90vw);
+  height: 85vh;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+#exportDialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+#exportDialog::backdrop { background: rgba(0,0,0,0.3); }
+#exportPreview {
+  flex: 1;
+  overflow: auto;
+  padding: 24px 32px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+#exportPreview h1 { font-size: 20px; border-bottom: 2px solid #1c6dff; padding-bottom: 8px; margin: 0 0 20px; }
+#exportPreview h2 { font-size: 16px; color: #1c6dff; margin-top: 24px; }
+#exportPreview h3 { font-size: 14px; }
+#exportPreview code { background: #f0f0f3; padding: 1px 4px; border-radius: 4px; font-size: 13px; }
+#exportPreview pre { background: #f6f6f8; padding: 12px; border-radius: 6px; overflow-x: auto; }
+#exportPreview blockquote { border-left: 3px solid #1c6dff; margin: 12px 0; padding: 4px 12px; color: #555; }
+#exportPreview ul, #exportPreview ol { padding-left: 20px; }
+@media print {
+  body > *:not(#exportDialog) { display: none !important; }
+  #exportDialog { position: static; width: 100%; max-height: none; border: none; box-shadow: none; }
+  #exportDialog .settings-head, #exportDialog .settings-foot { display: none; }
+  #exportPreview { padding: 0; }
 }
 
 /* ---- confirm dialog ---- */

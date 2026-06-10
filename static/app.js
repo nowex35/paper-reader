@@ -527,11 +527,20 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "-") { e.preventDefault(); liveZoom(eff / 1.15, ...c); }
 });
 
-/* ---------- vim 風スクロール (hjkl) ---------- */
+/* ---------- PDF クリックでフォーカスを取る ---------- */
+els.pdfPane.addEventListener("pointerdown", () => {
+  els.pdfPane.focus();
+});
+
+/* ---------- vim 風スクロール (hjkl) + ページ送り ---------- */
 document.addEventListener("keydown", (e) => {
   if (!pdfDoc || e.metaKey || e.ctrlKey || e.altKey) return;
   const t = e.target;
-  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  const inEditor = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+  const isArrow = e.key === "ArrowLeft" || e.key === "ArrowRight";
+  if (inEditor && !isArrow) return;
+  const pdfFocused = els.pdfPane.contains(document.activeElement) || document.activeElement === els.pdfPane || document.activeElement === document.body;
+  if (isArrow && !pdfFocused) return;
   const step = 60;
   const page = els.pdfPane.clientHeight * 0.8;
   switch (e.key) {
@@ -2306,6 +2315,30 @@ const Memo = (() => {
   });
   const memoSaveBtn = $("memoSaveBtn"); if (memoSaveBtn) memoSaveBtn.onclick = save;
   previewBtn.onclick = () => setPreview(!preview);
+
+  const exportBtn = $("memoExportBtn");
+  if (exportBtn) {
+    const exportDialog = document.getElementById("exportDialog");
+    const exportPreview = document.getElementById("exportPreview");
+    const exportClose = document.getElementById("exportClose");
+    const exportPrint = document.getElementById("exportPrint");
+
+    exportBtn.onclick = () => {
+      if (!cur || !exportDialog) return;
+      const title = titleEl.value.trim() || "メモ";
+      const body = getBody();
+      const html = renderMarkdown(body || "_(メモは空です)_");
+      const esc = title.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      exportPreview.innerHTML = `<h1>${esc}</h1>${html}`;
+      exportDialog.showModal();
+    };
+    if (exportClose) exportClose.onclick = () => exportDialog.close();
+    if (exportDialog) exportDialog.addEventListener("click", (e) => {
+      if (e.target === exportDialog) exportDialog.close();
+    });
+    if (exportPrint) exportPrint.onclick = () => window.print();
+  }
+
   $("memoDeleteBtn").onclick = async () => {
     if (!cur || !(await appConfirm("このメモを削除しますか？"))) return;
     await fetch("/api/notes/" + cur.id, { method: "DELETE" });
@@ -2649,16 +2682,45 @@ const Memo = (() => {
       if (!r.ok) throw new Error("HTTP " + r.status);
       const s = await r.json();
       serverProvider = s.provider || "";
-      statusEl.textContent = "保存しました";
-      keyInput.value = "";
-      keyInput.placeholder = s.key ? "設定済み（変更する場合のみ入力）" : "未設定";
-      if (s.model) modelInput.value = s.model;
       if (typeof Ask !== "undefined" && Ask.checkStatus) Ask.checkStatus();
+      dialog.close();
     } catch (e) {
       statusEl.textContent = "⚠️ 保存失敗: " + e.message;
     }
     saveBtn.disabled = false;
   };
+
+  const resetBtn = document.getElementById("settingsReset");
+  if (resetBtn) {
+    resetBtn.onclick = async () => {
+      // フォントサイズをデフォルトに
+      const defaultSizes = {
+        "--memo-font-size": 14,
+        "--ai-font-size": 14,
+        "--ask-font-size": 13.5,
+      };
+      await fetch("/api/font-sizes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(defaultSizes),
+      }).catch(() => {});
+      for (const [prop, val] of Object.entries(defaultSizes)) {
+        document.documentElement.style.setProperty(prop, val + "px");
+      }
+      // AIパネルを表示
+      const pane = els.sidePane;
+      const resizer = els.resizer;
+      if (pane && pane.style.display === "none") {
+        pane.style.display = "";
+        if (resizer) resizer.style.display = "";
+      }
+      const aiCheck = document.getElementById("settingsAiPanel");
+      if (aiCheck) aiCheck.checked = true;
+      // フォームをリロード
+      load();
+      statusEl.textContent = "デフォルトに戻しました";
+    };
+  }
 })();
 
 /* ---------- 文字サイズ設定 ---------- */

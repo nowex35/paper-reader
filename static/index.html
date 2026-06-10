@@ -74,6 +74,28 @@
     </div>
     <div class="settings-body">
       <section class="settings-section">
+        <h3>文字サイズ</h3>
+        <label class="size-slider">
+          メモ <span id="memoSizeVal">14</span>px
+          <input id="memoSizeRange" type="range" min="10" max="22" step="1" value="14" aria-label="メモの文字サイズ" />
+        </label>
+        <label class="size-slider">
+          AI 応答 <span id="aiSizeVal">14</span>px
+          <input id="aiSizeRange" type="range" min="10" max="22" step="1" value="14" aria-label="AI応答の文字サイズ" />
+        </label>
+        <label class="size-slider">
+          質問欄 <span id="askSizeVal">13.5</span>px
+          <input id="askSizeRange" type="range" min="10" max="22" step="0.5" value="13.5" aria-label="質問欄の文字サイズ" />
+        </label>
+      </section>
+      <section class="settings-section">
+        <h3>パネル表示</h3>
+        <label class="settings-toggle">
+          <input id="settingsAiPanel" type="checkbox" checked />
+          AIパネルを表示 <span class="muted">⌘2</span>
+        </label>
+      </section>
+      <section class="settings-section">
         <h3>質問機能</h3>
         <p class="settings-desc">クラウドLLMのAPIキーを設定すると、論文全文を踏まえた質問ができるようになります。翻訳・解説は設定なしで使えます。</p>
         <label>
@@ -123,30 +145,10 @@
           <p>キーはこの Mac 内にのみ保存され、選択したプロバイダの API への通信にのみ使用されます。</p>
         </details>
       </section>
-      <section class="settings-section">
-        <h3>文字サイズ</h3>
-        <label class="size-slider">
-          メモ <span id="memoSizeVal">14</span>px
-          <input id="memoSizeRange" type="range" min="10" max="22" step="1" value="14" aria-label="メモの文字サイズ" />
-        </label>
-        <label class="size-slider">
-          AI 応答 <span id="aiSizeVal">14</span>px
-          <input id="aiSizeRange" type="range" min="10" max="22" step="1" value="14" aria-label="AI応答の文字サイズ" />
-        </label>
-        <label class="size-slider">
-          質問欄 <span id="askSizeVal">13.5</span>px
-          <input id="askSizeRange" type="range" min="10" max="22" step="0.5" value="13.5" aria-label="質問欄の文字サイズ" />
-        </label>
-      </section>
-      <section class="settings-section">
-        <h3>パネル表示</h3>
-        <label class="settings-toggle">
-          <input id="settingsAiPanel" type="checkbox" checked />
-          AIパネルを表示 <span class="muted">⌘2</span>
-        </label>
-      </section>
     </div>
     <div class="settings-foot">
+      <button id="settingsReset" class="settings-reset-btn">デフォルトに戻す</button>
+      <span class="spacer"></span>
       <span id="settingsStatus" class="muted" role="status" aria-live="polite"></span>
       <button id="settingsSave">保存</button>
     </div>
@@ -167,27 +169,22 @@
     <section id="memoPanel" aria-label="メモ">
       <div id="memoDrag" role="separator" aria-orientation="horizontal" aria-label="メモパネルの高さ調整" title="ドラッグで高さ調整"></div>
       <div id="memoHead">
-        <strong class="memoLabel">📝 このメモ</strong>
-        <span id="memoStatus" class="muted" role="status" aria-live="polite"></span>
+        <strong class="memoLabel">📝 メモ</strong>
         <span class="spacer"></span>
         <button id="memoPreviewBtn" title="編集 / プレビュー切替">プレビュー</button>
-        <button id="memoClose" aria-label="メモパネルを閉じる" title="閉じる">×</button>
-        <span class="memo-sep"></span>
+        <button id="memoExportBtn" title="メモをPDFでダウンロード">📄 PDF</button>
         <button id="memoDeleteBtn" class="danger" title="このメモを削除">削除</button>
+        <button id="memoClose" aria-label="メモパネルを閉じる" title="閉じる">×</button>
       </div>
-      <div id="memoTabs" role="tablist" hidden>
-        <button class="memoTab active" data-tab="memo" role="tab" aria-selected="true">📝 メモ</button>
-        <button class="memoTab" data-tab="summary" role="tab" aria-selected="false">🧩 summary</button>
-      </div>
+      <div id="memoStatusBar"><span id="memoStatus" class="muted" role="status" aria-live="polite"></span></div>
+      <div id="memoTabs" role="tablist" hidden></div>
       <div id="memoEdit" class="memoView" role="tabpanel">
         <input id="memoTitle" type="text" placeholder="論文タイトル（一覧の見出しになります）" aria-label="論文タイトル" />
         <div id="memoMemoView">
           <textarea id="memoBody" placeholder="自分の言葉でまとめる（Markdown可）。&#10;例: 何の問題を / どう解いた / 何が新しい / 自分の研究との関係 …" aria-label="メモ本文"></textarea>
           <div id="memoPreview" hidden aria-label="メモプレビュー"></div>
         </div>
-        <div id="memoSummaryView" hidden>
-          <p class="summaryHint">落合フォーマットで自分でまとめてみる（各項目 Markdown 可・自動保存）</p>
-        </div>
+        <div id="memoSummaryView" hidden></div>
       </div>
     </section>
     <div id="memoResizer" class="col-resizer" role="separator" aria-orientation="vertical" aria-label="メモパネルの幅調整" hidden></div>
@@ -271,6 +268,19 @@
       </div>
       <div class="welcome-tip">💡 ヘッダー右端の <strong>?</strong> にカーソルを乗せるとショートカット一覧</div>
       <button id="welcomeStart">はじめる</button>
+    </div>
+  </dialog>
+
+  <dialog id="exportDialog" aria-label="PDF出力プレビュー">
+    <div class="settings-head">
+      <strong>📄 PDF出力プレビュー</strong>
+      <button id="exportClose" aria-label="閉じる" title="閉じる">×</button>
+    </div>
+    <div id="exportPreview"></div>
+    <div class="settings-foot">
+      <span class="muted">印刷ダイアログで「PDFとして保存」を選択</span>
+      <span class="spacer"></span>
+      <button id="exportPrint">印刷 / PDF保存</button>
     </div>
   </dialog>
 
