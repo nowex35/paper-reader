@@ -9,25 +9,23 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
-<!-- メモ本文のリッチ編集（見出し・太字が編集中も大きく/太く表示される） -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/continuelist.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/display/placeholder.min.js"></script>
-<!-- アプリ独自CSSはベンダーCSSの後に置き、CodeMirror のテーマ色などを上書きできるようにする -->
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body data-layout="standard">
-  <header id="topbar">
-    <button id="listToggle" title="読んだ論文の一覧を開閉 ⌘B">☰</button>
+  <header id="topbar" role="banner">
+    <button id="listToggle" aria-label="論文一覧の開閉" aria-expanded="false" title="論文一覧の開閉 ⌘B">☰</button>
     <button id="openBtn">📂 PDFを開く</button>
-    <span id="fileName" class="muted">ファイル未選択</span>
-    <span id="bookmarkGroup">
-      <button id="bookmarkBtn" title="ブックマーク追加/削除 ⌘D">🔖 0</button>
-      <button id="bookmarkPrev" class="bm-nav" title="前のしおりへ ⌘⇧K">‹</button>
-      <button id="bookmarkNext" class="bm-nav" title="次のしおりへ ⌘⇧J">›</button>
+    <span id="fileName" class="muted" aria-live="polite">ファイル未選択</span>
+    <span id="bookmarkGroup" role="group" aria-label="しおり">
+      <button id="bookmarkBtn" aria-label="しおり追加/削除" title="しおり追加/削除 ⌘D">🔖 0</button>
+      <button id="bookmarkPrev" class="bm-nav" aria-label="前のしおりへ" title="前のしおりへ ⌘⇧K">‹</button>
+      <button id="bookmarkNext" class="bm-nav" aria-label="次のしおりへ" title="次のしおりへ ⌘⇧J">›</button>
       <span id="bookmarkHelp" tabindex="0" role="button" aria-label="しおりのショートカット一覧">?
         <span class="bm-help-popover" role="tooltip">
           <b>🔖 しおり</b>
@@ -37,14 +35,14 @@
         </span>
       </span>
     </span>
-    <button id="memoToggle" title="メモパネルの開閉 ⌘M">📝 メモ</button>
+    <button id="memoToggle" aria-label="メモパネルの開閉" aria-expanded="false" title="メモパネルの開閉 ⌘M">📝 メモ</button>
     <span class="spacer"></span>
-    <select id="modelSelect" title="解説に使うローカルLLMモデル" hidden></select>
-    <span id="status" class="muted"></span>
-    <button id="layoutBtn" title="レイアウト切替">⊞</button>
-    <button id="settingsBtn" title="設定">⚙ 設定</button>
-    <span id="shortcutsHelp" aria-label="ショートカット一覧">?
-      <div class="sc-popover" role="tooltip">
+    <select id="modelSelect" aria-label="解説に使うローカルLLMモデル" title="解説に使うローカルLLMモデル" hidden></select>
+    <span id="status" class="muted" role="status" aria-live="polite"></span>
+    <button id="layoutBtn" aria-label="レイアウト切替" title="レイアウト切替">⊞</button>
+    <button id="settingsBtn" aria-label="設定を開く" title="設定">⚙ 設定</button>
+    <span id="shortcutsHelp" aria-label="ショートカット一覧" role="button" tabindex="0">?
+      <div class="sc-popover" role="tooltip" aria-label="キーボードショートカット一覧">
         <b>⌨ ショートカット</b>
         <div class="sc-grid">
           <kbd>⌘E</kbd><span>選択テキストを解説</span>
@@ -59,6 +57,7 @@
           <kbd>←/→</kbd><span>前/次のページへ</span>
           <kbd>⌘B</kbd><span>論文一覧の開閉</span>
           <kbd>⌘M</kbd><span>メモパネルの開閉</span>
+          <kbd>⌘2</kbd><span>AIパネルの開閉</span>
           <kbd>⌘S</kbd><span>メモを保存</span>
           <kbd>⌘F</kbd><span>ページ内検索</span>
           <kbd>⌘+/-/0</kbd><span>ズーム</span>
@@ -68,10 +67,10 @@
     </span>
   </header>
 
-  <dialog id="settingsDialog">
+  <dialog id="settingsDialog" aria-label="設定">
     <div class="settings-head">
       <strong>⚙️ 設定</strong>
-      <button id="settingsClose" title="閉じる">×</button>
+      <button id="settingsClose" aria-label="閉じる" title="閉じる">×</button>
     </div>
     <div class="settings-body">
       <section class="settings-section">
@@ -102,7 +101,7 @@
           <div id="helpGemini">
             <p><strong>Google Gemini</strong></p>
             <ol>
-              <li><a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> を開く</li>
+              <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> を開く</li>
               <li>「APIキーを作成」→ コピーして上の欄に貼り付け → 保存</li>
             </ol>
             <p>無料枠で十分使えます。</p>
@@ -110,14 +109,14 @@
           <div id="helpOpenai" hidden>
             <p><strong>OpenAI</strong></p>
             <ol>
-              <li><a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a> を開く</li>
+              <li><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">OpenAI Platform</a> を開く</li>
               <li>「Create new secret key」→ コピーして上の欄に貼り付け → 保存</li>
             </ol>
           </div>
           <div id="helpAnthropic" hidden>
             <p><strong>Anthropic (Claude)</strong></p>
             <ol>
-              <li><a href="https://console.anthropic.com/settings/keys" target="_blank">Anthropic Console</a> を開く</li>
+              <li><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic Console</a> を開く</li>
               <li>「Create Key」→ コピーして上の欄に貼り付け → 保存</li>
             </ol>
           </div>
@@ -128,69 +127,76 @@
         <h3>文字サイズ</h3>
         <label class="size-slider">
           メモ <span id="memoSizeVal">14</span>px
-          <input id="memoSizeRange" type="range" min="10" max="22" step="1" value="14" />
+          <input id="memoSizeRange" type="range" min="10" max="22" step="1" value="14" aria-label="メモの文字サイズ" />
         </label>
         <label class="size-slider">
           AI 応答 <span id="aiSizeVal">14</span>px
-          <input id="aiSizeRange" type="range" min="10" max="22" step="1" value="14" />
+          <input id="aiSizeRange" type="range" min="10" max="22" step="1" value="14" aria-label="AI応答の文字サイズ" />
         </label>
         <label class="size-slider">
           質問欄 <span id="askSizeVal">13.5</span>px
-          <input id="askSizeRange" type="range" min="10" max="22" step="0.5" value="13.5" />
+          <input id="askSizeRange" type="range" min="10" max="22" step="0.5" value="13.5" aria-label="質問欄の文字サイズ" />
+        </label>
+      </section>
+      <section class="settings-section">
+        <h3>パネル表示</h3>
+        <label class="settings-toggle">
+          <input id="settingsAiPanel" type="checkbox" checked />
+          AIパネルを表示 <span class="muted">⌘2</span>
         </label>
       </section>
     </div>
     <div class="settings-foot">
-      <span id="settingsStatus" class="muted"></span>
+      <span id="settingsStatus" class="muted" role="status" aria-live="polite"></span>
       <button id="settingsSave">保存</button>
     </div>
   </dialog>
 
-  <div id="main">
-    <aside id="listPane">
+  <div id="main" role="main">
+    <aside id="listPane" aria-label="論文一覧">
       <div id="listHead">
         <strong>📚 読んだ論文</strong>
         <span id="listCount" class="muted"></span>
         <span class="spacer"></span>
-        <button id="listCollapse" title="一覧を隠す">«</button>
+        <button id="listCollapse" aria-label="一覧を隠す" title="一覧を隠す">«</button>
       </div>
-      <input id="listSearch" type="search" placeholder="タイトル・PDF名で絞り込み" />
-      <ul id="listItems"></ul>
+      <input id="listSearch" type="search" placeholder="タイトル・PDF名で絞り込み" aria-label="論文を検索" />
+      <ul id="listItems" role="list"></ul>
     </aside>
 
-    <section id="memoPanel">
-      <div id="memoDrag" title="ドラッグで高さ調整"></div>
+    <section id="memoPanel" aria-label="メモ">
+      <div id="memoDrag" role="separator" aria-orientation="horizontal" aria-label="メモパネルの高さ調整" title="ドラッグで高さ調整"></div>
       <div id="memoHead">
         <strong class="memoLabel">📝 このメモ</strong>
-        <span id="memoStatus" class="muted"></span>
+        <span id="memoStatus" class="muted" role="status" aria-live="polite"></span>
         <span class="spacer"></span>
         <button id="memoPreviewBtn" title="編集 / プレビュー切替">プレビュー</button>
-        <button id="memoClose" title="閉じる">×</button>
+        <button id="memoClose" aria-label="メモパネルを閉じる" title="閉じる">×</button>
         <span class="memo-sep"></span>
         <button id="memoDeleteBtn" class="danger" title="このメモを削除">削除</button>
       </div>
-      <div id="memoTabs" hidden>
-        <button class="memoTab active" data-tab="memo">📝 メモ</button>
-        <button class="memoTab" data-tab="summary">🧩 summary</button>
+      <div id="memoTabs" role="tablist" hidden>
+        <button class="memoTab active" data-tab="memo" role="tab" aria-selected="true">📝 メモ</button>
+        <button class="memoTab" data-tab="summary" role="tab" aria-selected="false">🧩 summary</button>
       </div>
-      <div id="memoEdit" class="memoView">
-        <input id="memoTitle" type="text" placeholder="論文タイトル（一覧の見出しになります）" />
+      <div id="memoEdit" class="memoView" role="tabpanel">
+        <input id="memoTitle" type="text" placeholder="論文タイトル（一覧の見出しになります）" aria-label="論文タイトル" />
         <div id="memoMemoView">
-          <textarea id="memoBody" placeholder="自分の言葉でまとめる（Markdown可）。&#10;例: 何の問題を / どう解いた / 何が新しい / 自分の研究との関係 …"></textarea>
-          <div id="memoPreview" hidden></div>
+          <textarea id="memoBody" placeholder="自分の言葉でまとめる（Markdown可）。&#10;例: 何の問題を / どう解いた / 何が新しい / 自分の研究との関係 …" aria-label="メモ本文"></textarea>
+          <div id="memoPreview" hidden aria-label="メモプレビュー"></div>
         </div>
         <div id="memoSummaryView" hidden>
           <p class="summaryHint">落合フォーマットで自分でまとめてみる（各項目 Markdown 可・自動保存）</p>
         </div>
       </div>
     </section>
-    <div id="memoResizer" class="col-resizer" hidden></div>
+    <div id="memoResizer" class="col-resizer" role="separator" aria-orientation="vertical" aria-label="メモパネルの幅調整" hidden></div>
 
-    <div id="pdfPane" tabindex="-1">
+    <div id="pdfPane" tabindex="-1" aria-label="PDFビューワー">
       <div id="pdfViewport">
         <div id="pdfContainer">
           <div id="dropHint">
-            <div class="drop-icon">📄</div>
+            <div class="drop-icon" aria-hidden="true">📄</div>
             <p>PDFをここにドラッグ&ドロップ、または「📂 PDFを開く」</p>
             <p class="muted">テキストを選択 → ⌘E で日本語訳＋解説</p>
             <p class="muted">🔖 ⌘D しおり追加　←/→ ページ送り　? ショートカット一覧</p>
@@ -198,65 +204,65 @@
         </div>
       </div>
     </div>
-    <div id="resizer"></div>
-    <div id="sidePane">
-      <div id="results">
+    <div id="resizer" role="separator" aria-orientation="vertical" aria-label="AIパネルの幅調整"></div>
+    <div id="sidePane" aria-label="AI解説・質問">
+      <div id="results" aria-live="polite">
         <div class="empty">テキストを選択して ⌘E で日本語訳＋解説</div>
       </div>
-      <form id="askForm" hidden>
-        <div id="askQuote" hidden></div>
+      <form id="askForm" hidden aria-label="論文への質問">
+        <div id="askQuote" hidden aria-label="引用テキスト"></div>
         <div id="askRow">
-          <textarea id="askInput" rows="1" placeholder="この論文について質問（⌘+Enter で送信）"></textarea>
+          <textarea id="askInput" rows="1" placeholder="この論文について質問（⌘+Enter で送信）" aria-label="質問を入力"></textarea>
           <button type="submit" id="askSend" title="質問を送信">質問</button>
         </div>
-        <div id="askMeta" class="muted"></div>
+        <div id="askMeta" class="muted" role="status" aria-live="polite"></div>
       </form>
     </div>
   </div>
 
-  <button id="explainFab" hidden>解説 ⌘E</button>
+  <button id="explainFab" hidden aria-label="選択テキストを解説">解説 ⌘E</button>
 
-  <div id="findBar" hidden>
-    <input id="findInput" type="search" placeholder="ページ内検索 ⌘F" />
-    <span id="findCount" class="muted">0 / 0</span>
-    <button id="findPrev" title="前へ Shift+Enter">↑</button>
-    <button id="findNext" title="次へ Enter">↓</button>
-    <button id="findClose" title="閉じる Esc">×</button>
+  <div id="findBar" role="search" aria-label="ページ内検索" hidden>
+    <input id="findInput" type="search" placeholder="ページ内検索 ⌘F" aria-label="検索語句を入力" />
+    <span id="findCount" class="muted" aria-live="polite">0 / 0</span>
+    <button id="findPrev" aria-label="前の検索結果" title="前へ Shift+Enter">↑</button>
+    <button id="findNext" aria-label="次の検索結果" title="次へ Enter">↓</button>
+    <button id="findClose" aria-label="検索バーを閉じる" title="閉じる Esc">×</button>
   </div>
 
-  <input type="file" id="fileInput" accept="application/pdf" hidden />
+  <input type="file" id="fileInput" accept="application/pdf" hidden aria-hidden="true" />
 
-  <dialog id="welcomeDialog">
+  <dialog id="welcomeDialog" aria-label="ようこそ">
     <div class="welcome">
       <div class="welcome-header">
-        <span class="welcome-icon">📄</span>
+        <span class="welcome-icon" aria-hidden="true">📄</span>
         <h2>Naruhodo へようこそ</h2>
         <p class="welcome-sub">AI が読み解く、次世代の論文リーダー</p>
       </div>
       <div class="welcome-steps">
         <div class="welcome-step">
-          <span class="step-num">1</span>
+          <span class="step-num" aria-hidden="true">1</span>
           <div>
             <strong>PDFを開く</strong>
             <p>ドラッグ&ドロップ、または「📂 PDFを開く」から。日本語・英語どちらも対応</p>
           </div>
         </div>
         <div class="welcome-step">
-          <span class="step-num">2</span>
+          <span class="step-num" aria-hidden="true">2</span>
           <div>
             <strong>テキストを選択 → 解説（⌘E）</strong>
             <p>気になる箇所をドラッグ。日本語訳・用語解説・「要するにどういうことか」が表示されます</p>
           </div>
         </div>
         <div class="welcome-step">
-          <span class="step-num">3</span>
+          <span class="step-num" aria-hidden="true">3</span>
           <div>
             <strong>しおり・メモ・レイアウト</strong>
             <p>⌘D しおり追加、⌘M メモ、⊞ ボタンで標準/3カラム切替。←/→ でページ送り</p>
           </div>
         </div>
         <div class="welcome-step">
-          <span class="step-num">✨</span>
+          <span class="step-num" aria-hidden="true">✨</span>
           <div>
             <strong>論文に質問（オプション）</strong>
             <p>⚙ 設定からAPIキー（Gemini/OpenAI/Claude）を登録すると、論文全文を踏まえた質問ができます</p>
@@ -268,7 +274,7 @@
     </div>
   </dialog>
 
-  <dialog id="confirmDialog">
+  <dialog id="confirmDialog" aria-label="確認">
     <p id="confirmMsg"></p>
     <div class="confirm-buttons">
       <button id="confirmCancel">キャンセル</button>

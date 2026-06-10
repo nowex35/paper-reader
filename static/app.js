@@ -1210,6 +1210,38 @@ const Ask = (() => {
   return { reset, checkStatus };
 })();
 
+/* ---------- AIパネル開閉 ---------- */
+(() => {
+  const pane = els.sidePane;
+  const resizer = els.resizer;
+  const checkbox = document.getElementById("settingsAiPanel");
+  if (!pane) return;
+  let savedW = "";
+
+  function toggle() {
+    const hidden = pane.style.display === "none";
+    if (hidden) {
+      pane.style.display = "";
+      if (resizer) resizer.style.display = "";
+      if (savedW) pane.style.width = savedW;
+    } else {
+      savedW = pane.style.width || "";
+      pane.style.display = "none";
+      if (resizer) resizer.style.display = "none";
+    }
+    if (checkbox) checkbox.checked = pane.style.display !== "none";
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "2") {
+      e.preventDefault();
+      toggle();
+    }
+  });
+
+  if (checkbox) checkbox.addEventListener("change", toggle);
+})();
+
 /* ---------- サイドペイン幅リサイズ ---------- */
 let dragging = false;
 els.resizer.addEventListener("pointerdown", (e) => {
@@ -2047,6 +2079,7 @@ const Memo = (() => {
   function setOpen(open) {
     panel.classList.toggle("open", open);
     toggle.classList.toggle("active", open);
+    toggle.setAttribute("aria-expanded", String(open));
     localStorage.setItem("memoOpen", open ? "1" : "0");
     if (open) refreshCM(); // 非表示中に生成/更新された CM は表示時に測り直す
   }
@@ -2355,6 +2388,7 @@ const Memo = (() => {
   function setOpen(open) {
     pane.classList.toggle("collapsed", !open);
     toggle.classList.toggle("active", open);
+    toggle.setAttribute("aria-expanded", String(open));
     localStorage.setItem("listOpen", open ? "1" : "0");
   }
 
