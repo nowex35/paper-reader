@@ -1234,6 +1234,29 @@ document.addEventListener("mouseup", () => {
   if (savedW) els.sidePane.style.width = savedW;
 }
 
+/* ---------- メモパネル幅リサイズ（columnsレイアウト用） ---------- */
+(() => {
+  const memoResizer = document.getElementById("memoResizer");
+  const memoPanel = document.getElementById("memoPanel");
+  if (!memoResizer || !memoPanel) return;
+  let drag = false;
+  memoResizer.addEventListener("mousedown", () => {
+    drag = true;
+    document.body.style.userSelect = "none";
+  });
+  document.addEventListener("mousemove", (e) => {
+    if (!drag) return;
+    const mainRect = document.getElementById("main").getBoundingClientRect();
+    const w = Math.min(Math.max(e.clientX - mainRect.left, 200), 600);
+    memoPanel.style.setProperty("--memo-col-w", w + "px");
+  });
+  document.addEventListener("mouseup", () => {
+    if (!drag) return;
+    drag = false;
+    document.body.style.userSelect = "";
+  });
+})();
+
 /* ---------- ブックマーク（任意の行に印をつけて行き来する） ---------- */
 // 位置は { pageIndex, y(0..1) } で持つので、ズームしても倍率に追従する。
 // PDF ごとに localStorage に保存（ローカル完結。PDFキャッシュと同じ思想）。
@@ -2413,6 +2436,50 @@ const Memo = (() => {
 
   setOpen(false); // 既定は閉じる（オーバーレイなので）
   refresh();
+})();
+
+/* ---------- レイアウト切替 ---------- */
+(() => {
+  const btn = document.getElementById("layoutBtn");
+  const LAYOUTS = ["standard", "columns"];
+  const LABELS = { standard: "⊞", columns: "☰" };
+  if (!btn) return;
+
+  function apply(layout) {
+    document.body.dataset.layout = layout;
+    btn.textContent = LABELS[layout] || "⊞";
+    btn.title = layout === "standard" ? "3カラムに切替" : "標準に切替";
+    const panel = document.getElementById("memoPanel");
+    const memoResizer = document.getElementById("memoResizer");
+    if (layout === "columns") {
+      if (panel) panel.classList.add("open");
+      if (memoResizer) memoResizer.hidden = false;
+    } else {
+      if (memoResizer) memoResizer.hidden = true;
+    }
+  }
+
+  async function load() {
+    try {
+      const r = await fetch("/api/layout");
+      if (!r.ok) return;
+      const { layout } = await r.json();
+      if (layout && LAYOUTS.includes(layout)) apply(layout);
+    } catch {}
+  }
+
+  btn.onclick = () => {
+    const cur = document.body.dataset.layout || "standard";
+    const next = cur === "standard" ? "columns" : "standard";
+    apply(next);
+    fetch("/api/layout", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layout: next }),
+    }).catch(() => {});
+  };
+
+  load();
 })();
 
 /* ---------- 設定ダイアログ ---------- */

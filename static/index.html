@@ -19,7 +19,7 @@
 <!-- アプリ独自CSSはベンダーCSSの後に置き、CodeMirror のテーマ色などを上書きできるようにする -->
 <link rel="stylesheet" href="/style.css" />
 </head>
-<body>
+<body data-layout="standard">
   <header id="topbar">
     <button id="listToggle" title="読んだ論文の一覧を開閉 ⌘B">☰</button>
     <button id="openBtn">📂 PDFを開く</button>
@@ -42,6 +42,7 @@
     <span class="spacer"></span>
     <select id="modelSelect" title="解説に使うローカルLLMモデル" hidden></select>
     <span id="status" class="muted"></span>
+    <button id="layoutBtn" title="レイアウト切替">⊞</button>
     <button id="settingsBtn" title="設定">⚙ 設定</button>
     <span id="shortcutsHelp" aria-label="ショートカット一覧">?
       <div class="sc-popover" role="tooltip">
@@ -62,6 +63,7 @@
           <kbd>⌘S</kbd><span>メモを保存</span>
           <kbd>⌘F</kbd><span>ページ内検索</span>
           <kbd>⌘+/-/0</kbd><span>ズーム</span>
+          <kbd>⊞ ボタン</kbd><span>レイアウト切替</span>
         </div>
       </div>
     </span>
@@ -142,6 +144,35 @@
       <ul id="listItems"></ul>
     </aside>
 
+    <section id="memoPanel">
+      <div id="memoDrag" title="ドラッグで高さ調整"></div>
+      <div id="memoHead">
+        <strong class="memoLabel">📝 このメモ</strong>
+        <span id="memoStatus" class="muted"></span>
+        <span class="spacer"></span>
+        <button id="memoPreviewBtn" title="編集 / プレビュー切替">プレビュー</button>
+        <button id="memoSaveBtn">保存 ⌘S</button>
+        <button id="memoClose" title="閉じる">×</button>
+        <span class="memo-sep"></span>
+        <button id="memoDeleteBtn" class="danger" title="このメモを削除">削除</button>
+      </div>
+      <div id="memoTabs" hidden>
+        <button class="memoTab active" data-tab="memo">📝 メモ</button>
+        <button class="memoTab" data-tab="summary">🧩 summary</button>
+      </div>
+      <div id="memoEdit" class="memoView">
+        <input id="memoTitle" type="text" placeholder="論文タイトル（一覧の見出しになります）" />
+        <div id="memoMemoView">
+          <textarea id="memoBody" placeholder="自分の言葉でまとめる（Markdown可）。&#10;例: 何の問題を / どう解いた / 何が新しい / 自分の研究との関係 …"></textarea>
+          <div id="memoPreview" hidden></div>
+        </div>
+        <div id="memoSummaryView" hidden>
+          <p class="summaryHint">落合フォーマットで自分でまとめてみる（各項目 Markdown 可・自動保存）</p>
+        </div>
+      </div>
+    </section>
+    <div id="memoResizer" class="col-resizer" hidden></div>
+
     <div id="pdfPane" tabindex="-1">
       <div id="pdfViewport">
         <div id="pdfContainer">
@@ -170,39 +201,6 @@
       </form>
     </div>
   </div>
-
-  <section id="memoPanel">
-    <div id="memoDrag" title="ドラッグで高さ調整"></div>
-    <div id="memoHead">
-      <strong class="memoLabel">📝 このメモ</strong>
-      <span id="memoStatus" class="muted"></span>
-      <span class="spacer"></span>
-      <button id="memoPreviewBtn" title="編集 / プレビュー切替">プレビュー</button>
-      <button id="memoSaveBtn">保存 ⌘S</button>
-      <button id="memoClose" title="閉じる">×</button>
-      <span class="memo-sep"></span>
-      <button id="memoDeleteBtn" class="danger" title="このメモを削除">削除</button>
-    </div>
-
-    <div id="memoTabs" hidden>
-      <button class="memoTab active" data-tab="memo">📝 メモ</button>
-      <button class="memoTab" data-tab="summary">🧩 summary</button>
-    </div>
-
-    <div id="memoEdit" class="memoView">
-      <input id="memoTitle" type="text" placeholder="論文タイトル（一覧の見出しになります）" />
-
-      <div id="memoMemoView">
-        <textarea id="memoBody" placeholder="自分の言葉でまとめる（Markdown可）。&#10;例: 何の問題を / どう解いた / 何が新しい / 自分の研究との関係 …"></textarea>
-        <div id="memoPreview" hidden></div>
-      </div>
-
-      <div id="memoSummaryView" hidden>
-        <p class="summaryHint">落合フォーマットで自分でまとめてみる（各項目 Markdown 可・自動保存）</p>
-        <!-- 質問→メモ欄ブロックは app.js が生成 -->
-      </div>
-    </div>
-  </section>
 
   <button id="explainFab" hidden>解説 ⌘E</button>
 

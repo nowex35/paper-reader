@@ -368,6 +368,7 @@ def build_prompt(text: str, context: str | None) -> str:
 
 WELCOMED_FILE = BASE_DIR / ".welcomed"
 LAST_PDF_FILE = BASE_DIR / ".last-pdf.json"
+LAYOUT_FILE = BASE_DIR / ".layout"
 
 
 @app.get("/api/welcomed")
@@ -401,6 +402,25 @@ def set_last_pdf(req: LastPdfIn):
         json.dumps({"id": req.id, "name": req.name}, ensure_ascii=False),
         encoding="utf-8")
     return {"ok": True}
+
+
+@app.get("/api/layout")
+def get_layout():
+    try:
+        return {"layout": LAYOUT_FILE.read_text(encoding="utf-8").strip()}
+    except Exception:  # noqa: BLE001
+        return {"layout": "standard"}
+
+
+class LayoutIn(BaseModel):
+    layout: str
+
+
+@app.put("/api/layout")
+def set_layout(req: LayoutIn):
+    val = req.layout.strip() if req.layout else "standard"
+    LAYOUT_FILE.write_text(val, encoding="utf-8")
+    return {"layout": val}
 
 
 @app.get("/api/health")
