@@ -521,8 +521,8 @@ document.addEventListener("keydown", (e) => {
   const c = [r.width / 2, r.height / 2];
   const eff = zoom * live;
   if (e.key === "0") { e.preventDefault(); liveZoom(1, ...c); }
-  else if (e.key === "=" || e.key === "+") { e.preventDefault(); liveZoom(eff * 1.15, ...c); }
-  else if (e.key === "-") { e.preventDefault(); liveZoom(eff / 1.15, ...c); }
+  else if (e.key === "]") { e.preventDefault(); liveZoom(eff * 1.15, ...c); }
+  else if (e.key === "[") { e.preventDefault(); liveZoom(eff / 1.15, ...c); }
 });
 
 /* ---------- ページナビ ---------- */
@@ -1017,6 +1017,7 @@ const Conversations = (() => {
     const frag = document.createDocumentFragment();
     for (const item of items) frag.appendChild(renderCard(item));
     els.results.appendChild(frag);
+    requestAnimationFrame(() => { els.results.scrollTop = els.results.scrollHeight; });
   }
 
   function reset() {
@@ -1042,12 +1043,15 @@ async function explain(text, context) {
   const body = card.querySelector(".body");
   body.textContent = "解説を生成中…";
   body.classList.add("waiting");
-  els.results.prepend(card);
-  els.results.scrollTop = 0;
+  els.results.appendChild(card);
+  els.results.scrollTop = els.results.scrollHeight;
 
   let acc = "";
-  let pinTop = true;
-  const onScroll = () => { if (els.results.scrollTop > 10) pinTop = false; };
+  let pinBottom = true;
+  const onScroll = () => {
+    const gap = els.results.scrollHeight - els.results.scrollTop - els.results.clientHeight;
+    if (gap > 30) pinBottom = false;
+  };
   els.results.addEventListener("scroll", onScroll);
   try {
     const resp = await fetch("/api/explain", {
@@ -1067,7 +1071,7 @@ async function explain(text, context) {
       acc += dec.decode(value, { stream: true });
       body.classList.remove("waiting");
       body.innerHTML = renderMarkdown(acc);
-      if (pinTop) els.results.scrollTop = 0;
+      if (pinBottom) els.results.scrollTop = els.results.scrollHeight;
     }
   } catch (e) {
     acc = `> ⚠️ ${e.message}`;
@@ -1142,7 +1146,7 @@ const Ask = (() => {
       const r = await fetch("/api/ask-status");
       if (!r.ok) return;
       const s = await r.json();
-      const NAMES = { gemini: "Gemini", openai: "OpenAI", anthropic: "Claude" };
+      const NAMES = { gemini: "Gemini", openai: "OpenAI", anthropic: "Claude", custom: "カスタム" };
       if (s.available) {
         setFormVisible(true);
         meta.textContent = "質問: " + (NAMES[s.provider] || s.provider) + " " + s.model;
@@ -1182,12 +1186,15 @@ const Ask = (() => {
     const body = card.querySelector(".body");
     body.textContent = "回答を生成中…";
     body.classList.add("waiting");
-    els.results.prepend(card);
-    els.results.scrollTop = 0;
+    els.results.appendChild(card);
+    els.results.scrollTop = els.results.scrollHeight;
 
     let acc = "";
-    let pinTop = true;
-    const onScroll = () => { if (els.results.scrollTop > 10) pinTop = false; };
+    let pinBottom = true;
+    const onScroll = () => {
+      const gap = els.results.scrollHeight - els.results.scrollTop - els.results.clientHeight;
+      if (gap > 30) pinBottom = false;
+    };
     els.results.addEventListener("scroll", onScroll);
     try {
       const resp = await fetch("/api/ask", {
@@ -1207,7 +1214,7 @@ const Ask = (() => {
         acc += dec.decode(value, { stream: true });
         body.classList.remove("waiting");
         body.innerHTML = renderMarkdown(acc);
-        if (pinTop) els.results.scrollTop = 0;
+        if (pinBottom) els.results.scrollTop = els.results.scrollHeight;
       }
       history.push({
         role: "user",
@@ -1259,7 +1266,7 @@ const Ask = (() => {
   }
 
   checkStatus();
-  return { reset, checkStatus };
+  return { reset, checkStatus, provider: () => { try { return document.getElementById("askMeta").textContent; } catch { return ""; } } };
 })();
 
 /* ---------- AIパネル開閉 ---------- */
@@ -2672,30 +2679,124 @@ const Memo = (() => {
   const statusEl = document.getElementById("settingsStatus");
   const providerSel = document.getElementById("settingsProvider");
   const keyInput = document.getElementById("settingsApiKey");
+  const modelSelect = document.getElementById("settingsModelSelect");
   const modelInput = document.getElementById("settingsModel");
   const baseUrlLabel = document.getElementById("settingsBaseUrlLabel");
   const baseUrlInput = document.getElementById("settingsBaseUrl");
+  const nativeLangSel = document.getElementById("settingsNativeLang");
   if (!dialog || !btn) return;
 
   const DEFAULTS = {
-    gemini:    { model: "gemini-3.1-flash-lite", base_url: "" },
-    openai:    { model: "gpt-4o-mini",           base_url: "https://api.openai.com" },
-    anthropic: { model: "claude-sonnet-4-20250514", base_url: "" },
+    gemini:    { model: "gemini-3.5-flash", base_url: "" },
+    openai:    { model: "gpt-5.4-mini",           base_url: "https://api.openai.com" },
+    anthropic: { model: "claude-sonnet-4-6", base_url: "" },
+    custom:    { model: "",                      base_url: "http://localhost:1234" },
   };
-  const HELP = { gemini: "helpGemini", openai: "helpOpenai", anthropic: "helpAnthropic" };
+  const HELP = { gemini: "helpGemini", openai: "helpOpenai", anthropic: "helpAnthropic", custom: "helpCustom" };
+  let providerModels = {};
 
-  function updateUI(provider) {
+  function populateModels(models, provider, currentModel) {
+    modelSelect.innerHTML = "";
+    if (!models.length) {
+      const o = document.createElement("option");
+      o.value = "__custom__";
+      o.textContent = "APIキーを入力するとモデル一覧を取得します";
+      modelSelect.appendChild(o);
+      modelInput.hidden = false;
+      modelInput.value = currentModel || "";
+      modelInput.placeholder = (DEFAULTS[provider] || {}).model || "モデルIDを入力";
+      return;
+    }
+    for (const m of models) {
+      const o = document.createElement("option");
+      o.value = m;
+      o.textContent = m;
+      modelSelect.appendChild(o);
+    }
+    const customOpt = document.createElement("option");
+    customOpt.value = "__custom__";
+    customOpt.textContent = "カスタム…";
+    modelSelect.appendChild(customOpt);
+
+    const isPreset = models.includes(currentModel);
+    if (isPreset) {
+      modelSelect.value = currentModel;
+      modelInput.hidden = true;
+      modelInput.value = "";
+    } else if (currentModel) {
+      modelSelect.value = "__custom__";
+      modelInput.hidden = false;
+      modelInput.value = currentModel;
+    } else {
+      modelSelect.value = models[0] || "__custom__";
+      modelInput.hidden = modelSelect.value !== "__custom__";
+    }
+  }
+
+  async function fetchModels(provider, currentModel) {
+    const fallback = providerModels[provider] || [];
+    populateModels(fallback, provider, currentModel);
+    try {
+      const body = {};
+      const k = keyInput.value.trim();
+      if (k) body.api_key = k;
+      const b = baseUrlInput.value.trim();
+      if (b) body.base_url = b;
+      const r = await fetch("/api/provider-models/" + provider, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) return;
+      const data = await r.json();
+      if (data.models && data.models.length) {
+        providerModels[provider] = data.models;
+        populateModels(data.models, provider, currentModel);
+      }
+    } catch {}
+  }
+
+  function updateUI(provider, currentModel) {
     const d = DEFAULTS[provider] || DEFAULTS.gemini;
-    modelInput.placeholder = d.model;
-    baseUrlLabel.hidden = provider !== "openai";
+    modelInput.placeholder = d.model || "モデル名を入力";
+    const showBaseUrl = provider === "openai" || provider === "custom";
+    baseUrlLabel.hidden = !showBaseUrl;
     if (d.base_url) baseUrlInput.placeholder = d.base_url;
+    const hint = document.getElementById("baseUrlHint");
+    if (hint) {
+      hint.hidden = provider !== "custom";
+      hint.textContent = provider === "custom" ? "例: http://localhost:1234（APIキーは空欄でもOK）" : "";
+    }
+    const keyLabel = keyInput.closest("label");
+    if (keyLabel) {
+      const req = provider !== "custom";
+      keyInput.placeholder = req ? (keyInput.placeholder || "未設定") : "不要なら空欄のままでOK";
+    }
     for (const [k, id] of Object.entries(HELP)) {
       const el = document.getElementById(id);
       if (el) el.hidden = k !== provider;
     }
+    fetchModels(provider, currentModel || "");
   }
 
+  modelSelect.addEventListener("change", () => {
+    modelInput.hidden = modelSelect.value !== "__custom__";
+    if (modelSelect.value === "__custom__") modelInput.focus();
+  });
+
+  let keyDebounce = null;
+  keyInput.addEventListener("input", () => {
+    clearTimeout(keyDebounce);
+    keyDebounce = setTimeout(() => {
+      if (keyInput.value.trim().length > 10) {
+        fetchModels(providerSel.value, modelSelect.value);
+      }
+    }, 600);
+  });
+
   let serverProvider = "";
+  let serverModel = "";
+  let serverNativeLang = "ja";
 
   async function load() {
     try {
@@ -2703,17 +2804,22 @@ const Memo = (() => {
       if (!r.ok) return;
       const s = await r.json();
       serverProvider = s.provider || "";
+      serverModel = s.model || "";
+      serverNativeLang = s.native_language || "ja";
       providerSel.value = s.provider || "gemini";
       keyInput.value = "";
       keyInput.placeholder = s.key_set ? "設定済み（変更する場合のみ入力）" : "未設定";
-      modelInput.value = s.model || "";
       baseUrlInput.value = s.base_url || "";
-      updateUI(providerSel.value);
+      if (nativeLangSel) nativeLangSel.value = serverNativeLang;
+      updateUI(providerSel.value, serverModel);
       statusEl.textContent = "";
     } catch {}
   }
 
-  providerSel.addEventListener("change", () => updateUI(providerSel.value));
+  providerSel.addEventListener("change", () => {
+    const d = DEFAULTS[providerSel.value] || {};
+    updateUI(providerSel.value, d.model || "");
+  });
 
   btn.onclick = () => { load(); dialog.showModal(); };
   closeBtn.onclick = () => dialog.close();
@@ -2726,10 +2832,13 @@ const Memo = (() => {
     const pv = providerSel.value;
     if (pv !== serverProvider) payload.provider = pv;
     if (keyInput.value.trim()) payload.api_key = keyInput.value.trim();
-    const mv = modelInput.value.trim();
-    if (mv) payload.model = mv;
+    else if (pv === "custom" && pv !== serverProvider) payload.api_key = "";
+    const mv = modelSelect.value === "__custom__" ? modelInput.value.trim() : modelSelect.value;
+    if (mv && mv !== serverModel) payload.model = mv;
     const bv = baseUrlInput.value.trim();
-    if (pv === "openai" && bv) payload.base_url = bv;
+    if ((pv === "openai" || pv === "custom") && bv) payload.base_url = bv;
+    const nlv = nativeLangSel ? nativeLangSel.value : "";
+    if (nlv && nlv !== serverNativeLang) payload.native_language = nlv;
     if (!Object.keys(payload).length) {
       statusEl.textContent = "変更がありません";
       return;
@@ -2779,11 +2888,38 @@ const Memo = (() => {
       }
       const aiCheck = document.getElementById("settingsAiPanel");
       if (aiCheck) aiCheck.checked = true;
+      // 母国語をデフォルトに
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ native_language: "ja" }),
+      }).catch(() => {});
       // フォームをリロード
       load();
       statusEl.textContent = "デフォルトに戻しました";
     };
   }
+
+  // アプリ起動時にモデル一覧をプリフェッチ（設定ダイアログを開く前にキャッシュ）
+  (async () => {
+    try {
+      const r = await fetch("/api/settings");
+      if (!r.ok) return;
+      const s = await r.json();
+      serverProvider = s.provider || "";
+      serverModel = s.model || "";
+      for (const p of s.providers || []) {
+        const mr = await fetch("/api/provider-models/" + p, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!mr.ok) continue;
+        const data = await mr.json();
+        if (data.models && data.models.length) providerModels[p] = data.models;
+      }
+    } catch {}
+  })();
 })();
 
 /* ---------- 文字サイズ設定 ---------- */

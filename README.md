@@ -82,10 +82,10 @@ Dock に常駐させたい場合は `/Applications` か Dock にドラッグ
 
 ```bash
 source .venv/bin/activate
-uvicorn server:app --port 8010
+python server.py
 ```
 
-ブラウザで <http://localhost:8010> を開く。
+ブラウザで <http://localhost:8432> を開く。
 
 > ⚠️ 指定ポートが他プロセスに使われていると別サーバの応答が返ることがある。
 > 空いているポート（例: 8010）を使う。使用中ポートの確認:

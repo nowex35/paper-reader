@@ -188,6 +188,7 @@ def _update_loading(window, status: str, pct: int) -> None:
         pass
 
 
+
 def _boot(window) -> None:
     """バックグラウンドで全セットアップを行い、完了後に本体へ遷移する。"""
     # 1. Ollama 確認・起動
@@ -252,6 +253,7 @@ def main() -> None:
         height=900,
         min_size=(900, 600),
     )
+
     webview.start(func=_boot, args=(window,))
 
 

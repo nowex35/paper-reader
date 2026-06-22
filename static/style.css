@@ -272,6 +272,7 @@ button:hover { background: #f0f0f3; }
   border-radius: 5px;
   font-family: inherit;
   font-size: 11.5px;
+  text-transform: uppercase;
 }
 .bm-help-popover span { color: #d8d8dc; }
 /* 上向きの三角ツメ */
@@ -497,6 +498,7 @@ button:hover { background: #f0f0f3; }
   overflow: auto;
   white-space: pre-wrap;
 }
+#askForm[hidden] { display: none; }
 #askQuote[hidden] { display: none; }
 #askRow { display: flex; gap: 8px; align-items: flex-end; }
 #askInput {
@@ -715,6 +717,10 @@ button.danger:hover { background: #fdecea; }
   overflow: hidden;
   transition: height .15s ease;
   z-index: 40;
+}
+[data-layout="standard"] #sidePane,
+[data-layout="standard"] #resizer {
+  z-index: 41;
 }
 [data-layout="standard"] #memoPanel.open {
   height: var(--memo-h, 300px);
@@ -1183,6 +1189,7 @@ button.danger:hover { background: #fdecea; }
   text-align: right;
   color: #444;
   white-space: nowrap;
+  text-transform: uppercase;
 }
 .sc-grid span {
   font-size: 12.5px;

@@ -2,6 +2,30 @@
 # Naruhodo.dmg を生成する。
 # ユーザーは DMG を開いて .app を /Applications にドラッグするだけ。
 # 初回起動時に Python venv 構築・Ollama セットアップ・モデル pull が自動で走る。
+#
+# ── 署名 & 公証（Gatekeeper 警告なし配布）──
+#
+# 環境変数で Developer ID を渡すと、正式署名 → Apple 公証 → staple まで自動実行:
+#
+#   DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)" \
+#   NOTARY_PROFILE="naruhodo" \
+#   ./make_dmg.sh
+#
+# 事前準備（1回だけ）:
+#   1. Apple Developer Program に登録（$99/年）
+#      https://developer.apple.com/programs/
+#   2. Xcode → Settings → Accounts で Apple ID を追加
+#   3. Keychain Access に「Developer ID Application」証明書をインストール
+#      (Xcode → Settings → Accounts → Manage Certificates → "+" → Developer ID Application)
+#   4. 公証用プロファイルを作成:
+#      xcrun notarytool store-credentials "naruhodo" \
+#        --apple-id "your@email.com" \
+#        --team-id "TEAMID" \
+#        --password "app-specific-password"
+#      (App-specific password: https://appleid.apple.com → サインインとセキュリティ → アプリ用パスワード)
+#
+# 環境変数を指定しなければ従来通り ad-hoc 署名（自分用ビルド）。
+#
 set -euo pipefail
 
 SRCDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -76,7 +100,8 @@ for d in notes bookmarks conversations pdfs static; do
   fi
 done
 cp "$RESOURCES/app/server.py" "$RESOURCES/app/desktop.py" "$RESOURCES/app/requirements.txt" "$APPDATA/"
-cp -r "$RESOURCES/app/static" "$APPDATA/"
+rm -rf "$APPDATA/static"
+cp -r "$RESOURCES/app/static" "$APPDATA/static"
 if [ -f "$RESOURCES/app/.env.example" ] && [ ! -f "$APPDATA/.env" ]; then
   cp "$RESOURCES/app/.env.example" "$APPDATA/.env"
 fi
@@ -153,59 +178,59 @@ exec "$APPDATA/.venv/bin/python" -u "$APPDATA/desktop.py" >> "$LOG" 2>&1
 LAUNCHER
 chmod +x "$APP/Contents/MacOS/naruhodo"
 
-# ---- ad-hoc 署名（Gatekeeper で即ブロックされるのを防ぐ） ----
-codesign --force --deep --sign - "$APP" 2>&1 || echo "⚠️ codesign スキップ（署名なしで続行）"
-# quarantine 属性を除去（DMG 経由でも Gatekeeper 警告を軽減）
-xattr -cr "$APP" 2>/dev/null || true
+# ---- 署名 ----
+DEVELOPER_ID="${DEVELOPER_ID:-}"
+NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 
-# ---- DMG 作成（背景画像＋アイコン配置付き） ----
-ln -s /Applications "$WORK/Applications"
-
-mkdir -p "$WORK/.background"
-if [ -f "$SRCDIR/dmg-background.png" ]; then
-  cp "$SRCDIR/dmg-background.png" "$WORK/.background/bg.png"
+if [ -n "$DEVELOPER_ID" ]; then
+  echo "🔏 Developer ID で署名中…"
+  codesign --force --deep --options runtime --sign "$DEVELOPER_ID" "$APP" 2>&1
+  codesign --verify --deep --strict "$APP" 2>&1
+  echo "   署名OK: $DEVELOPER_ID"
+else
+  echo "⚠️  DEVELOPER_ID 未設定 → ad-hoc 署名（自分用ビルド。他人に渡すと Gatekeeper 警告が出ます）"
+  codesign --force --deep --sign - "$APP" 2>&1 || echo "   codesign スキップ"
+  xattr -cr "$APP" 2>/dev/null || true
 fi
 
+# ---- DMG 作成（create-dmg で背景画像＋アイコン配置） ----
 rm -f "$DMG"
-DMGRW="$SRCDIR/Naruhodo-rw.dmg"
-rm -f "$DMGRW"
 
-hdiutil create -volname "Naruhodo" -srcfolder "$WORK" -ov -format UDRW "$DMGRW" 2>&1
-
-MOUNT_DIR=$(hdiutil attach -readwrite -noverify "$DMGRW" | grep '/Volumes/' | awk '{print $NF}')
-if [ -n "$MOUNT_DIR" ]; then
-  osascript <<APPLESCRIPT
-    tell application "Finder"
-      tell disk "Naruhodo"
-        open
-        set current view of container window to icon view
-        set toolbar visible of container window to false
-        set statusbar visible of container window to false
-        set bounds of container window to {200, 120, 860, 520}
-        set opts to the icon view options of container window
-        set icon size of opts to 96
-        set arrangement of opts to not arranged
-        if exists file ".background:bg.png" then
-          set background picture of opts to file ".background:bg.png"
-        end if
-        set position of item "Naruhodo.app" of container window to {165, 200}
-        set position of item "Applications" of container window to {495, 200}
-        close
-        open
-        update without registering applications
-        delay 1
-        close
-      end tell
-    end tell
-APPLESCRIPT
-  sync
-  hdiutil detach "$MOUNT_DIR" 2>/dev/null
+CREATE_DMG_ARGS=(
+  --volname "Naruhodo"
+  --window-pos 200 120
+  --window-size 660 400
+  --icon-size 96
+  --icon "Naruhodo.app" 165 200
+  --app-drop-link 495 200
+)
+if [ -f "$SRCDIR/dmg-background.png" ]; then
+  CREATE_DMG_ARGS+=(--background "$SRCDIR/dmg-background.png")
 fi
 
-hdiutil convert "$DMGRW" -format UDZO -o "$DMG" 2>&1
-rm -f "$DMGRW"
+create-dmg "${CREATE_DMG_ARGS[@]}" "$DMG" "$WORK" 2>&1 || true
 rm -rf "$WORK"
 
-echo ""
-echo "✅ $DMG を生成しました"
+# ---- 公証 & staple（Developer ID 署名時のみ） ----
+if [ -n "$DEVELOPER_ID" ] && [ -n "$NOTARY_PROFILE" ]; then
+  echo ""
+  echo "📤 Apple に公証を提出中（数分かかります）…"
+  xcrun notarytool submit "$DMG" \
+    --keychain-profile "$NOTARY_PROFILE" \
+    --wait 2>&1
+  echo "📎 公証チケットを DMG に添付中…"
+  xcrun stapler staple "$DMG" 2>&1
+  echo ""
+  echo "✅ $DMG を生成しました（署名 + 公証済み 🎉）"
+  echo "   Gatekeeper 警告なしで配布できます。"
+elif [ -n "$DEVELOPER_ID" ]; then
+  echo ""
+  echo "✅ $DMG を生成しました（署名済み・公証なし）"
+  echo "   ⚠️  NOTARY_PROFILE を設定すれば公証も自動実行されます。"
+  echo "   公証なしでも署名済みなので、Gatekeeper 警告は「開発元を確認」程度に軽減されます。"
+else
+  echo ""
+  echo "✅ $DMG を生成しました（ad-hoc 署名・自分用）"
+  echo "   他人に渡す場合は DEVELOPER_ID と NOTARY_PROFILE を設定してビルドしてください。"
+fi
 echo "   配布: DMG を渡すだけ。ユーザーは Naruhodo.app を Applications にドラッグ → ダブルクリック。"
