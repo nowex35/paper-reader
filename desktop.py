@@ -68,7 +68,7 @@ def _build_loading_html() -> str:
   }}
   #bar {{
     height: 100%; width: 0%;
-    background: linear-gradient(90deg, #4a4a9e, #32327D);
+    background: linear-gradient(90deg, #3b82f6, #1c6dff);
     border-radius: 3px;
     transition: width .4s ease;
   }}
