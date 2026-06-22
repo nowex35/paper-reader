@@ -4,14 +4,58 @@ html, body { height: 100%; margin: 0; }
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #f0f1f3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(240, 241, 243, .55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity .18s ease;
+  transition: opacity .22s ease;
 }
 #switchOverlay.active {
   opacity: 1;
   pointer-events: auto;
+}
+#switchOverlay .switch-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  transform: scale(.92);
+  opacity: 0;
+  transition: transform .3s ease, opacity .3s ease;
+}
+#switchOverlay.active .switch-logo {
+  transform: scale(1);
+  opacity: 1;
+}
+#switchOverlay .switch-icon {
+  font-size: 44px;
+  animation: switchPulse 1.2s ease-in-out infinite;
+}
+#switchOverlay .switch-bar {
+  width: 120px;
+  height: 3px;
+  border-radius: 2px;
+  background: #dcdce0;
+  overflow: hidden;
+}
+#switchOverlay .switch-bar-fill {
+  height: 100%;
+  width: 40%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #3b82f6, #1c6dff);
+  animation: switchSlide 1s ease-in-out infinite;
+}
+@keyframes switchPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+@keyframes switchSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
 }
 ::placeholder {
   color: #c0c0c4;
