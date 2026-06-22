@@ -506,8 +506,12 @@ els.pdfPane.addEventListener(
     if (!pdfDoc || !(e.ctrlKey || e.metaKey)) return; // ピンチは ctrlKey で届く
     e.preventDefault(); // ブラウザ全体ズームを抑止し PDF をズーム
     const r = els.pdfPane.getBoundingClientRect();
+    const isWheel = Math.abs(e.deltaY) > 10;
+    const factor = isWheel
+      ? (e.deltaY > 0 ? 1 / 1.15 : 1.15)
+      : Math.exp(-e.deltaY * 0.01);
     liveZoom(
-      zoom * live * Math.exp(-e.deltaY * 0.01),
+      zoom * live * factor,
       e.clientX - r.left,
       e.clientY - r.top
     );
