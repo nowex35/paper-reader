@@ -2011,9 +2011,6 @@ function attachListEditing(ta) {
     if (mod && e.shiftKey && e.key.toLowerCase() === "h") {
       e.preventDefault();
       toggleHeading(ta);
-    } else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b") {
-      e.preventDefault();
-      toggleBold(ta);
     } else if (e.key === "Tab") {
       e.preventDefault();
       e.shiftKey ? outdentSelection(ta) : indentSelection(ta);
@@ -2098,8 +2095,6 @@ const Memo = (() => {
       Enter: "newlineAndIndentContinueMarkdownList",
       Tab: (c) => c.execCommand("indentMore"),
       "Shift-Tab": (c) => c.execCommand("indentLess"),
-      "Cmd-B": cmToggleBold,
-      "Ctrl-B": cmToggleBold,
       "Shift-Cmd-H": cmToggleHeading,
       "Shift-Ctrl-H": cmToggleHeading,
     },
@@ -2369,8 +2364,6 @@ const Memo = (() => {
         Enter: "newlineAndIndentContinueMarkdownList",
         Tab: (c) => c.execCommand("indentMore"),
         "Shift-Tab": (c) => c.execCommand("indentLess"),
-        "Cmd-B": cmToggleBold,
-        "Ctrl-B": cmToggleBold,
         "Shift-Cmd-H": cmToggleHeading,
         "Shift-Ctrl-H": cmToggleHeading,
       },
@@ -2441,7 +2434,7 @@ const Memo = (() => {
       if (!panel.classList.contains("open")) setOpen(true);
       save();
     }
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "m") {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
       e.preventDefault();
       setOpen(!panel.classList.contains("open"));
     }
@@ -2595,7 +2588,7 @@ const Memo = (() => {
   });
 
   document.addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "b") {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "m") {
       const t = e.target;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       e.preventDefault();
