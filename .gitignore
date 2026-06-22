@@ -21,3 +21,4 @@ bookmarks/*.json
 # 会話履歴（解説・質問カード）も個人データ
 conversations/
 .DS_Store
+.welcomed

@@ -64,6 +64,7 @@ fi
 
 # ---- ソースコードを同梱 ----
 cp "$SRCDIR/server.py" "$SRCDIR/desktop.py" "$SRCDIR/requirements.txt" "$APP/Contents/Resources/app/"
+rsync -a --exclude '__pycache__' "$SRCDIR/routers/" "$APP/Contents/Resources/app/routers/"
 cp -r "$SRCDIR/static" "$APP/Contents/Resources/app/static"
 if [ -f "$SRCDIR/Naruhodo.png" ]; then
   cp "$SRCDIR/Naruhodo.png" "$APP/Contents/Resources/app/Naruhodo.png"
@@ -103,6 +104,8 @@ for d in notes bookmarks conversations pdfs static; do
   fi
 done
 cp "$RESOURCES/app/server.py" "$RESOURCES/app/desktop.py" "$RESOURCES/app/requirements.txt" "$APPDATA/"
+rm -rf "$APPDATA/routers"
+cp -r "$RESOURCES/app/routers" "$APPDATA/routers"
 [ -f "$RESOURCES/app/Naruhodo.png" ] && cp "$RESOURCES/app/Naruhodo.png" "$APPDATA/"
 rm -rf "$APPDATA/static"
 cp -r "$RESOURCES/app/static" "$APPDATA/static"
