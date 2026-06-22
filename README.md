@@ -140,24 +140,13 @@ python server.py
 
 ## リリース
 
-`v*` タグを push すると GitHub Actions が自動で署名・公証済み DMG をビルドし、
+`v*` タグを push すると GitHub Actions が署名・公証済み DMG をビルドし、
 GitHub Release にアップロードする。
 
 ```bash
 git tag v1.2.0
 git push origin v1.2.0
 ```
-
-ワークフロー (`.github/workflows/release.yml`) が行うこと:
-
-1. `make_dmg.sh` で `.app` をパッケージング
-2. Developer ID で署名
-3. Apple 公証（notarization）→ staple
-4. GitHub Release を作成し `Naruhodo.dmg` をアップロード
-
-> 署名・公証に必要な Secrets（`CERTIFICATE_P12`, `CERTIFICATE_PASSWORD`,
-> `DEVELOPER_ID`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`）は
-> リポジトリの Settings → Secrets に登録済み。
 
 ## 今後の拡張候補（未実装）
 
