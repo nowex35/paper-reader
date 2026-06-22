@@ -2607,6 +2607,8 @@ const Memo = (() => {
     } else if (e.key === "Enter" && focusIdx >= 0) {
       e.preventDefault();
       activateFocused();
+      setOpen(false);
+      els.pdfPane.focus();
     } else if (e.key === "Escape") {
       e.preventDefault();
       setOpen(false);
