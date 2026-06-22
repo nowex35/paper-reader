@@ -2441,7 +2441,7 @@ const Memo = (() => {
       if (!panel.classList.contains("open")) setOpen(true);
       save();
     }
-    if ((e.metaKey || e.ctrlKey) && e.key === ".") {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
       e.preventDefault();
       setOpen(!panel.classList.contains("open"));
     }
