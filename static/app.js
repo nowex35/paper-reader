@@ -2577,9 +2577,46 @@ const Memo = (() => {
     render();
   }
 
+  let focusIdx = -1;
+
+  function setFocus(idx) {
+    const items = itemsEl.querySelectorAll(".li-item");
+    items.forEach((li) => li.classList.remove("focused"));
+    focusIdx = Math.max(-1, Math.min(idx, items.length - 1));
+    if (focusIdx >= 0 && items[focusIdx]) {
+      items[focusIdx].classList.add("focused");
+      items[focusIdx].scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  function activateFocused() {
+    const items = itemsEl.querySelectorAll(".li-item");
+    if (focusIdx >= 0 && items[focusIdx]) {
+      const main = items[focusIdx].querySelector(".li-main");
+      if (main) main.click();
+    }
+  }
+
+  pane.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setFocus(focusIdx + 1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setFocus(focusIdx - 1);
+    } else if (e.key === "Enter" && focusIdx >= 0) {
+      e.preventDefault();
+      activateFocused();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
+      els.pdfPane.focus();
+    }
+  });
+
   toggle.onclick = () => setOpen(pane.classList.contains("collapsed"));
   if (collapse) collapse.onclick = () => setOpen(false);
-  searchEl.addEventListener("input", render);
+  searchEl.addEventListener("input", () => { focusIdx = -1; render(); });
 
   document.addEventListener("pointerdown", (e) => {
     if (pane.classList.contains("collapsed")) return;
@@ -2592,7 +2629,14 @@ const Memo = (() => {
       const t = e.target;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       e.preventDefault();
-      setOpen(pane.classList.contains("collapsed"));
+      const opening = pane.classList.contains("collapsed");
+      setOpen(opening);
+      if (opening) {
+        focusIdx = -1;
+        setFocus(0);
+        pane.setAttribute("tabindex", "-1");
+        pane.focus();
+      }
     }
   });
 

@@ -1025,6 +1025,7 @@ button.danger:hover { background: #fdecea; }
 }
 .li-item:hover { background: #ececee; }
 .li-item.active { background: #e4ecff; }
+.li-item.focused { outline: 2px solid #1c6dff; outline-offset: -2px; }
 .li-main { flex: 1; min-width: 0; }
 .li-title {
   font-weight: 600;
