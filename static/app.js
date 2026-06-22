@@ -2441,7 +2441,7 @@ const Memo = (() => {
       if (!panel.classList.contains("open")) setOpen(true);
       save();
     }
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "m") {
       e.preventDefault();
       setOpen(!panel.classList.contains("open"));
     }
@@ -2653,7 +2653,7 @@ const Memo = (() => {
     const memoResizer = document.getElementById("memoResizer");
 
     if (layout === "columns") {
-      if (panel) panel.classList.add("open");
+      if (panel && !panel.classList.contains("open")) panel.classList.add("open");
       if (memoResizer) memoResizer.hidden = false;
     } else {
       if (memoResizer) memoResizer.hidden = true;

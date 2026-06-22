@@ -739,7 +739,15 @@ button.danger:hover { background: #fdecea; }
   border-right: none;
   overflow: hidden;
 }
-[data-layout="columns"] #memoPanel,
+[data-layout="columns"] #memoPanel:not(.open) {
+  width: 0 !important;
+  min-width: 0;
+  overflow: hidden;
+  border-right: none;
+}
+[data-layout="columns"] #memoPanel:not(.open) + .col-resizer {
+  display: none;
+}
 [data-layout="columns"] #memoPanel.open {
   height: auto;
 }
@@ -749,7 +757,6 @@ button.danger:hover { background: #fdecea; }
   flex: 1;
   overflow: auto;
 }
-[data-layout="columns"] #memoToggle { display: none; }
 [data-layout="columns"] #memoResizer { display: block !important; }
 .col-resizer {
   flex: none;
