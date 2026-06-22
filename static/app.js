@@ -355,12 +355,30 @@ async function renderAll() {
 
 // ArrayBuffer から描画（id・名前は確定済み前提）。getDocument は buf を
 // 消費しうるので、ハッシュ計算・キャッシュ送信は呼び出し側で先に済ませる。
+const switchOverlay = document.getElementById("switchOverlay");
+function fadeIn() {
+  return new Promise((r) => {
+    if (!switchOverlay) { r(); return; }
+    switchOverlay.classList.add("active");
+    setTimeout(r, 180);
+  });
+}
+function fadeOut() {
+  if (!switchOverlay) return;
+  switchOverlay.classList.remove("active");
+}
+
+let isFirstPdf = true;
 async function openPdfBuffer(buf, name, id) {
   const token = ++loadToken;
   if (!(await Memo.flush())) return false;
   if (token !== loadToken) return false;
 
-  clearTimeout(commitTimer); // 保留中のズーム確定をキャンセル（別PDFと混ざらない）
+  const switching = !isFirstPdf && pdfDoc;
+  if (switching) await fadeIn();
+  isFirstPdf = false;
+
+  clearTimeout(commitTimer);
   if (typeof PdfSelection !== "undefined") PdfSelection.clear();
   els.fab.hidden = true;
   els.fileName.textContent = name;
@@ -377,6 +395,7 @@ async function openPdfBuffer(buf, name, id) {
   }).promise;
   if (token !== loadToken) {
     try { await doc.destroy(); } catch {}
+    if (switching) fadeOut();
     return false;
   }
   pdfDoc = doc;
@@ -390,12 +409,19 @@ async function openPdfBuffer(buf, name, id) {
     body: JSON.stringify({ id, name }),
   }).catch(() => {});
   const rendered = await renderAll();
-  if (token !== loadToken || !rendered) return false;
+  if (token !== loadToken || !rendered) {
+    if (switching) fadeOut();
+    return false;
+  }
   await Memo.openForPdf(id, name);
-  if (token !== loadToken) return false;
+  if (token !== loadToken) {
+    if (switching) fadeOut();
+    return false;
+  }
   Bookmarks.renderMarkers();
   Finder.refresh();
   els.pdfPane.focus();
+  if (switching) fadeOut();
   return true;
 }
 

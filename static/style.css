@@ -1,5 +1,18 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
+#switchOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #f0f1f3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease;
+}
+#switchOverlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
 ::placeholder {
   color: #c0c0c4;
 }
