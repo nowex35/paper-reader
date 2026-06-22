@@ -161,7 +161,13 @@ PDF_DIR = BASE_DIR / "pdfs"
 PDF_DIR.mkdir(exist_ok=True)
 MAX_PDF_BYTES = 200 * 1024 * 1024  # 200MB 上限（暴走防止）
 
-def _build_explain_instruction(lang: str) -> str:
+def _is_japanese_text(text: str) -> bool:
+    ja_count = sum(1 for c in text if '　' <= c <= '鿿' or '豈' <= c <= '﫿')
+    alpha_count = sum(1 for c in text if c.isalpha())
+    return alpha_count > 0 and ja_count / alpha_count > 0.3
+
+
+def _build_explain_instruction(lang: str, source_is_native: bool = False) -> str:
     if lang == "en":
         return """You are an assistant helping a researcher read English academic papers.
 The user has selected a passage in a paper viewer.
@@ -176,6 +182,23 @@ Help the reader intuitively grasp the meaning. Start with a one-sentence plain-l
 For equations, something like "Basically, the larger the input, the slower the output grows."
 For methods, something like "Think of it as skimming the table of contents instead of reading every page."
 Keep accuracy intact. End with one sentence on where this passage fits in the paper's flow (intro / method / experiment / discussion).
+"""
+    if lang == "ja" and source_is_native:
+        return """あなたは日本語の学術論文・文書を読む日本人研究者を助けるアシスタントです。
+ユーザーは論文ビューワで分からない箇所を選択しています。
+渡された「選択箇所」について、簡潔で正確な日本語の解説を Markdown で出力してください。
+出力は必ず次の2つの見出し構成にし、冗長な前置きは書かないこと。
+
+## 用語・記号の解説
+選択箇所に出てくる専門用語・略語・数式記号を箇条書きで簡潔に説明する。無ければ「特になし」。
+
+## 要するにどういうことか
+読者が「あーそういうことね」と腹落ちできるように、具体的な例えや身近な比喩を交えて説明する。
+まず一文で「つまり○○ということ」と平易に言い切り、その後に具体例や直感的なイメージで補足する。
+たとえば数式なら「要するに入力が大きいほど出力が鈍くなる、という関係」のように噛み砕く。
+手法の説明なら「ざっくり言えば、辞書を引く代わりに目次だけ見て当たりをつける方式」のように
+読者の頭に絵が浮かぶレベルまで落とす。ただし正確さは犠牲にしないこと。
+最後に、論文の流れの中でこの箇所がどこに位置するか（導入・手法・実験・考察など）を一言添える。
 """
     if lang == "ja":
         return """あなたは英語の学術論文を読む日本人研究者を助けるアシスタントです。
@@ -246,10 +269,11 @@ def ollama_status() -> dict:
 
 
 def stream_ollama(text: str, context: str | None):
+    source_is_native = NATIVE_LANGUAGE != "en" and _is_japanese_text(text)
     payload = {
         "model": CURRENT_MODEL,
         "messages": [
-            {"role": "system", "content": _build_explain_instruction(NATIVE_LANGUAGE)},
+            {"role": "system", "content": _build_explain_instruction(NATIVE_LANGUAGE, source_is_native)},
             {"role": "user", "content": build_prompt(text, context)},
         ],
         "stream": True,
@@ -389,18 +413,16 @@ def stream_openai(question: str, paper: str, selection: str | None,
         base_url=f"{base.rstrip('/')}/v1",
         timeout=300.0,
     )
-    messages = [{"role": "system", "content": _build_system(paper)}]
-    messages.extend(_build_messages(question, selection, history))
-    stream = client.chat.completions.create(
+    input_parts = [{"role": "system", "content": _build_system(paper)}]
+    input_parts.extend(_build_messages(question, selection, history))
+    stream = client.responses.create(
         model=ASK_MODEL,
-        messages=messages,
-        temperature=0.4,
+        input=input_parts,
         stream=True,
     )
-    for chunk in stream:
-        piece = chunk.choices[0].delta.content if chunk.choices else None
-        if piece:
-            yield piece
+    for event in stream:
+        if event.type == "response.output_text.delta":
+            yield event.delta
 
 
 def stream_anthropic(question: str, paper: str, selection: str | None,

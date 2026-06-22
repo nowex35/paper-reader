@@ -941,6 +941,18 @@ els.fab.onclick = () => {
   if (s) explain(s.text, s.context);
 };
 
+// ⌘/Ctrl + C — PDF選択テキストをクリップボードにコピー
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c") {
+    const s = currentSelection();
+    if (s) {
+      e.preventDefault();
+      navigator.clipboard.writeText(s.text);
+      els.status.textContent = "コピーしました";
+    }
+  }
+});
+
 // ⌘/Ctrl + E
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "e") {
@@ -2429,9 +2441,15 @@ const Memo = (() => {
       if (!panel.classList.contains("open")) setOpen(true);
       save();
     }
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "m") {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "m") {
       e.preventDefault();
       setOpen(!panel.classList.contains("open"));
+    }
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "j") {
+      e.preventDefault();
+      if (!panel.classList.contains("open")) setOpen(true);
+      if (cm) cm.focus();
+      else bodyEl.focus();
     }
   });
 
