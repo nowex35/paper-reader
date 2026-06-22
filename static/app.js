@@ -2098,9 +2098,7 @@ const Memo = (() => {
     return { openForPdf() {}, openExisting() {}, setOpen() {}, async flush() { return true; } };
   }
 
-  // 落合フォーマット6項目。key はサーバの SUMMARY_KEYS と一致させること。
-  // 出典: 落合陽一「先端技術とメディア表現1 #FTMA15」(本ツールの考案ではない)
-  // https://www.slideshare.net/Ochyai/1-ftma15
+  // 論文を構造的に把握するための6項目。key はサーバの SUMMARY_KEYS と一致させること。
   const SUMMARY_FIELDS = [
     ["what", "① どんなもの？", "この研究を一言で。何を達成したか。"],
     ["prior", "② 先行研究と比べてどこがすごい？", "既存手法・従来研究との違い／優位点。"],
@@ -2366,7 +2364,7 @@ const Memo = (() => {
       b.classList.toggle("active", b.dataset.tab === tab)
     );
     if (labelEl)
-      labelEl.textContent = tab === "summary" ? "🧩 落合まとめ" : "📝 このメモ";
+      labelEl.textContent = tab === "summary" ? "🧩 まとめ" : "📝 このメモ";
     localStorage.setItem("memoTab", tab);
     if (tab === "memo") refreshCM(); // メモタブ表示時に CM を測り直す
   }
@@ -2908,6 +2906,7 @@ const Memo = (() => {
     updateUI(providerSel.value, d.model || "");
   });
 
+  load();
   btn.onclick = () => { load(); dialog.showModal(); };
   closeBtn.onclick = () => dialog.close();
   dialog.addEventListener("click", (e) => {
