@@ -20,14 +20,30 @@ import uvicorn
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_MODEL = "qwen3.5:4b"
 
-LOADING_HTML = """
-<!DOCTYPE html>
+
+def _icon_data_uri() -> str:
+    import base64
+    icon_path = os.path.join(APP_DIR, "Naruhodo.png")
+    if not os.path.isfile(icon_path):
+        static_icon = os.path.join(APP_DIR, "static", "icon.png")
+        if os.path.isfile(static_icon):
+            icon_path = static_icon
+        else:
+            return ""
+    with open(icon_path, "rb") as f:
+        return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+
+
+def _build_loading_html() -> str:
+    icon_uri = _icon_data_uri()
+    icon_tag = f'<img class="icon" src="{icon_uri}" width="80" height="80" alt="" />' if icon_uri else '<div class="icon">NH</div>'
+    return f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
     height: 100vh;
     display: flex;
     flex-direction: column;
@@ -37,35 +53,37 @@ LOADING_HTML = """
     background: #f0f1f3;
     color: #1c1c1e;
     gap: 24px;
-  }
-  .icon { font-size: 64px; }
-  .title { font-size: 22px; font-weight: 700; }
-  #status {
+  }}
+  .icon {{ border-radius: 16px; }}
+  .title {{ font-size: 22px; font-weight: 700; }}
+  #status {{
     font-size: 14px; color: #6a6a70;
     min-height: 20px;
     transition: opacity .2s;
-  }
-  .bar-wrap {
+  }}
+  .bar-wrap {{
     width: 260px; height: 6px;
     background: #dcdce0; border-radius: 3px;
     overflow: hidden;
-  }
-  #bar {
+  }}
+  #bar {{
     height: 100%; width: 0%;
-    background: linear-gradient(90deg, #3b82f6, #1c6dff);
+    background: linear-gradient(90deg, #4a4a9e, #32327D);
     border-radius: 3px;
     transition: width .4s ease;
-  }
+  }}
 </style>
 </head>
 <body>
-  <div class="icon">📄</div>
+  {icon_tag}
   <div class="title">Naruhodo</div>
   <div id="status">起動準備中…</div>
   <div class="bar-wrap"><div id="bar"></div></div>
 </body>
-</html>
-"""
+</html>"""
+
+
+LOADING_HTML = _build_loading_html()
 
 
 def _free_port() -> int:

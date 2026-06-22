@@ -65,6 +65,9 @@ fi
 # ---- ソースコードを同梱 ----
 cp "$SRCDIR/server.py" "$SRCDIR/desktop.py" "$SRCDIR/requirements.txt" "$APP/Contents/Resources/app/"
 cp -r "$SRCDIR/static" "$APP/Contents/Resources/app/static"
+if [ -f "$SRCDIR/Naruhodo.png" ]; then
+  cp "$SRCDIR/Naruhodo.png" "$APP/Contents/Resources/app/Naruhodo.png"
+fi
 # .env.example を .env として同梱（ユーザーが自分で作らなくて済む）
 if [ -f "$SRCDIR/.env.example" ]; then
   cp "$SRCDIR/.env.example" "$APP/Contents/Resources/app/.env.example"
@@ -100,6 +103,7 @@ for d in notes bookmarks conversations pdfs static; do
   fi
 done
 cp "$RESOURCES/app/server.py" "$RESOURCES/app/desktop.py" "$RESOURCES/app/requirements.txt" "$APPDATA/"
+[ -f "$RESOURCES/app/Naruhodo.png" ] && cp "$RESOURCES/app/Naruhodo.png" "$APPDATA/"
 rm -rf "$APPDATA/static"
 cp -r "$RESOURCES/app/static" "$APPDATA/static"
 if [ -f "$RESOURCES/app/.env.example" ] && [ ! -f "$APPDATA/.env" ]; then

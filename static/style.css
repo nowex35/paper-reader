@@ -22,7 +22,7 @@ html, body { height: 100%; margin: 0; }
   width: 28px;
   height: 28px;
   border: 3px solid #d0d0d4;
-  border-top-color: #1c6dff;
+  border-top-color: #32327D;
   border-radius: 50%;
   animation: switchSpin .7s linear infinite;
   opacity: 0;
@@ -41,7 +41,7 @@ html, body { height: 100%; margin: 0; }
   color: #c0c0c4 !important;
 }
 :focus-visible {
-  outline: 2px solid #1c6dff;
+  outline: 2px solid #32327D;
   outline-offset: 2px;
 }
 button:focus:not(:focus-visible),
@@ -117,9 +117,9 @@ button:hover { background: #f0f0f3; }
 #listToggle:hover { color: #1c1c1e; background: none; }
 #listToggle.active { color: #1c1c1e; }
 #openBtn {
-  background: #1c6dff;
+  background: #32327D;
   color: #fff;
-  border-color: #1c6dff;
+  border-color: #32327D;
 }
 #openBtn:hover { background: #0b59e6; }
 #modelSelect {
@@ -193,7 +193,7 @@ button:hover { background: #f0f0f3; }
   border-radius: 16px;
   padding: 40px 32px;
 }
-#dropHint .drop-icon { font-size: 48px; margin-bottom: 12px; }
+#dropHint .drop-icon { margin-bottom: 12px; border-radius: 12px; }
 #dropHint p { margin: 6px 0; }
 #pdfPane.dragover { outline: 3px dashed #4c8dff; outline-offset: -8px; }
 
@@ -274,7 +274,7 @@ button:hover { background: #f0f0f3; }
   cursor: help;
   user-select: none;
 }
-#bookmarkHelp:hover, #bookmarkHelp:focus { color: #1c6dff; border-color: #1c6dff; outline: none; }
+#bookmarkHelp:hover, #bookmarkHelp:focus { color: #32327D; border-color: #32327D; outline: none; }
 .bm-help-popover {
   display: none;
   position: absolute;
@@ -327,7 +327,7 @@ button:hover { background: #f0f0f3; }
   width: 22px;
   height: 20px;
   margin-top: -10px; /* top に y% を指定するので中央揃え */
-  background: #1c6dff;
+  background: #32327D;
   color: #fff;
   font-size: 11px;
   font-weight: 700;
@@ -346,7 +346,7 @@ button:hover { background: #f0f0f3; }
   right: -6px;
   top: 0;
   border: 10px solid transparent;
-  border-left-color: #1c6dff;
+  border-left-color: #32327D;
   border-right-width: 0;
 }
 .bookmark-marker:hover { background: #0b59e6; }
@@ -366,7 +366,7 @@ button:hover { background: #f0f0f3; }
   width: 22px;
   height: 20px;
   margin-top: -10px;
-  background: #1c6dff;
+  background: #32327D;
   opacity: 0.35;
   color: #fff;
   font-size: 11px;
@@ -383,7 +383,7 @@ button:hover { background: #f0f0f3; }
   right: -6px;
   top: 0;
   border: 10px solid transparent;
-  border-left-color: #1c6dff;
+  border-left-color: #32327D;
   border-right-width: 0;
   opacity: 0.35;
 }
@@ -412,7 +412,7 @@ button:hover { background: #f0f0f3; }
   border: 1px solid #d8d8dd;
   border-radius: 6px;
 }
-#findInput:focus { outline: 2px solid #1c6dff; outline-offset: -1px; }
+#findInput:focus { outline: 2px solid #32327D; outline-offset: -1px; }
 #findCount {
   font-size: 12px;
   min-width: 52px;
@@ -441,7 +441,7 @@ button:hover { background: #f0f0f3; }
 #explainFab {
   position: fixed;
   z-index: 50;
-  background: #1c6dff;
+  background: #32327D;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -486,7 +486,7 @@ button:hover { background: #f0f0f3; }
   user-select: text;
   cursor: text;
 }
-.card .body h2 { font-size: 14px; margin: 14px 0 4px; color: #1c6dff; }
+.card .body h2 { font-size: 14px; margin: 14px 0 4px; color: #32327D; }
 .card .body p { margin: 6px 0; }
 .card .body ul { margin: 4px 0; padding-left: 20px; }
 .card .body code { background: #f0f0f3; padding: 1px 4px; border-radius: 4px; }
@@ -498,7 +498,7 @@ button:hover { background: #f0f0f3; }
 }
 .card .toolbar button { padding: 4px 10px; font-size: 12px; }
 .card.loading .body.waiting { color: #8a8a8e; }
-.card.loading .body::after { content: " ▍"; color: #1c6dff; }
+.card.loading .body::after { content: " ▍"; color: #32327D; }
 
 /* 質問カード(Gemini): 翻訳カードと見分けるため青系アクセント。src は質問文なので
    等幅ではなく本文フォントで読みやすく。 */
@@ -525,7 +525,7 @@ button:hover { background: #f0f0f3; }
   font-size: 12px;
   color: #2a4d8f;
   background: #eef3ff;
-  border-left: 3px solid #1c6dff;
+  border-left: 3px solid #32327D;
   border-radius: 0 6px 6px 0;
   padding: 5px 8px;
   max-height: 60px;
@@ -547,10 +547,10 @@ button:hover { background: #f0f0f3; }
   max-height: 160px;
   overflow-y: auto;
 }
-#askInput:focus { outline: 2px solid #1c6dff; outline-offset: -1px; }
+#askInput:focus { outline: 2px solid #32327D; outline-offset: -1px; }
 #askSend {
   flex: none;
-  background: #1c6dff;
+  background: #32327D;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -580,7 +580,7 @@ button:hover { background: #f0f0f3; }
   color: #666;
 }
 #layoutBtn:hover { color: #1c1c1e; background: #f0f0f3; }
-#layoutBtn.active { background: #1c6dff; color: #fff; border-color: #1c6dff; }
+#layoutBtn.active { background: #32327D; color: #fff; border-color: #32327D; }
 
 /* ---- settings dialog ---- */
 #settingsDialog {
@@ -638,7 +638,7 @@ button:hover { background: #f0f0f3; }
   border-radius: 6px;
   box-sizing: border-box;
 }
-.settings-body input:focus { outline: 2px solid #1c6dff; outline-offset: -1px; }
+.settings-body input:focus { outline: 2px solid #32327D; outline-offset: -1px; }
 .settings-help {
   margin-top: 4px;
   font-size: 12px;
@@ -668,7 +668,7 @@ button:hover { background: #f0f0f3; }
 }
 .settings-help summary {
   cursor: pointer;
-  color: #1c6dff;
+  color: #32327D;
   font-size: 12.5px;
 }
 .settings-help summary:hover { text-decoration: underline; }
@@ -677,7 +677,7 @@ button:hover { background: #f0f0f3; }
   padding-left: 20px;
   line-height: 1.8;
 }
-.settings-help a { color: #1c6dff; }
+.settings-help a { color: #32327D; }
 .settings-help p {
   margin: 8px 0 0;
   line-height: 1.5;
@@ -700,7 +700,7 @@ button:hover { background: #f0f0f3; }
 }
 .settings-reset-btn:hover { color: #e53e3e; }
 .settings-foot button {
-  background: #1c6dff;
+  background: #32327D;
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -711,7 +711,7 @@ button:hover { background: #f0f0f3; }
 .settings-foot button:hover { background: #0b59e6; }
 
 /* ---- memo panel (下部トグル) ---- */
-#memoToggle.active { background: #1c6dff; color: #fff; border-color: #1c6dff; }
+#memoToggle.active { background: #32327D; color: #fff; border-color: #32327D; }
 #memoToggle.dirty::after {
   content: "";
   display: inline-block;
@@ -726,7 +726,7 @@ button:hover { background: #f0f0f3; }
 #memoSaveBtn {
   border: none;
   background: transparent;
-  color: #1c6dff;
+  color: #32327D;
   font-size: 12px;
   padding: 4px 6px;
   cursor: pointer;
@@ -863,7 +863,7 @@ button.danger:hover { background: #fdecea; }
 .memoTab:hover { background: #f2f2f5; }
 .memoTab.active {
   background: #fff;
-  color: #1c6dff;
+  color: #32327D;
   font-weight: 600;
   border-color: #ececef;
 }
@@ -1058,8 +1058,8 @@ button.danger:hover { background: #fdecea; }
   margin-bottom: 2px;
 }
 .li-item:hover { background: #ececee; }
-.li-item.active { background: #e4ecff; }
-.li-item.focused { outline: 2px solid #1c6dff; outline-offset: -2px; }
+.li-item.active { background: #e6e6f0; }
+.li-item.focused { outline: 2px solid #32327D; outline-offset: -2px; }
 .li-main { flex: 1; min-width: 0; }
 .li-title {
   font-weight: 600;
@@ -1113,7 +1113,7 @@ button.danger:hover { background: #fdecea; }
   text-align: center;
   margin-bottom: 24px;
 }
-.welcome-icon { font-size: 48px; display: block; margin-bottom: 8px; }
+.welcome-icon { display: block; margin-bottom: 8px; border-radius: 12px; }
 .welcome-header h2 {
   font-size: 20px;
   font-weight: 700;
@@ -1139,7 +1139,7 @@ button.danger:hover { background: #fdecea; }
   flex: none;
   width: 28px;
   height: 28px;
-  background: #1c6dff;
+  background: #32327D;
   color: #fff;
   border-radius: 50%;
   font-size: 13px;
@@ -1172,7 +1172,7 @@ button.danger:hover { background: #fdecea; }
   padding: 10px;
   font-size: 15px;
   font-weight: 600;
-  background: #1c6dff;
+  background: #32327D;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -1273,7 +1273,7 @@ button.danger:hover { background: #fdecea; }
 #exportPreview h4 { font-size: 1em; }
 #exportPreview h5, #exportPreview h6 { font-size: .92em; color: #6a6a70; }
 #exportPreview :is(h1, h2, h3, h4, h5, h6):first-child { margin-top: 2px; }
-#exportPreview blockquote { border-left: 3px solid #1c6dff; margin: 12px 0; padding: 4px 12px; color: #555; }
+#exportPreview blockquote { border-left: 3px solid #32327D; margin: 12px 0; padding: 4px 12px; color: #555; }
 #exportPreview pre { background: #f6f6f8; padding: 12px; border-radius: 6px; overflow-x: auto; }
 @media print {
   body > *:not(#exportDialog) { display: none !important; }

@@ -4,6 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Naruhodo</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -227,7 +229,7 @@
       <div id="pdfViewport">
         <div id="pdfContainer">
           <div id="dropHint">
-            <div class="drop-icon" aria-hidden="true">📄</div>
+            <img class="drop-icon" src="/static/icon-64.png" width="64" height="64" alt="" aria-hidden="true" />
             <p>PDFをここにドラッグ&ドロップ、または「📂 PDFを開く」</p>
             <p class="muted">テキストを選択 → ⌘E で日本語訳＋解説</p>
             <p class="muted">🔖 ⌘D しおり追加　←/→ ページ送り　? ショートカット一覧</p>
@@ -266,7 +268,7 @@
   <dialog id="welcomeDialog" aria-label="ようこそ">
     <div class="welcome">
       <div class="welcome-header">
-        <span class="welcome-icon" aria-hidden="true">📄</span>
+        <img class="welcome-icon" src="/static/icon-64.png" width="64" height="64" alt="" aria-hidden="true" />
         <h2>Naruhodo へようこそ</h2>
         <p class="welcome-sub">AI が読み解く、次世代の論文リーダー</p>
       </div>

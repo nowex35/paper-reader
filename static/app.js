@@ -2580,7 +2580,7 @@ const Memo = (() => {
         await fetch("/api/notes/" + n.id, { method: "DELETE" });
         if (n.id === activeId) {
           pdfDoc = null;
-          els.container.innerHTML = '<div id="dropHint"><div class="drop-icon">📄</div><p>PDFをここにドラッグ&ドロップ、または「📂 PDFを開く」</p></div>';
+          els.container.innerHTML = '<div id="dropHint"><img class="drop-icon" src="/static/icon-64.png" width="64" height="64" alt="" /><p>PDFをここにドラッグ&ドロップ、または「📂 PDFを開く」</p></div>';
           els.fileName.textContent = "ファイル未選択";
           els.fileName.classList.add("muted");
           els.results.innerHTML = "";
