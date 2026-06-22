@@ -1308,7 +1308,7 @@ const Ask = (() => {
   }
 
   document.addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "2") {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "l") {
       e.preventDefault();
       toggle();
     }
