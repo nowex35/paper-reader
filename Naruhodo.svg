@@ -1,0 +1,82 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>NH Paper Reader Transparent Icon</title>
+  <desc>Transparent background document icon with a connected NH monogram for an academic paper reader.</desc>
+
+  <defs>
+    <filter id="paperShadow" x="160" y="90" width="720" height="860" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="32" flood-color="#1C6DFF" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#paperShadow)">
+    <!-- Paper -->
+    <path d="M240 158
+             C240 125.967 265.967 100 298 100
+             H642
+             C657.4 100 672.2 106.1 683.1 117
+             L805 238.9
+             C815.9 249.8 822 264.6 822 280
+             V834
+             C822 866.033 796.033 892 764 892
+             H298
+             C265.967 892 240 866.033 240 834
+             V158Z" fill="#FFFFFF"/>
+
+    <!-- Folded corner -->
+    <path d="M642 100 V238
+             C642 261.748 661.252 281 685 281
+             H822
+             L642 100Z" fill="#DCEBFF"/>
+    <path d="M642 100 V238
+             C642 261.748 661.252 281 685 281
+             H822" stroke="#EEF5FF" stroke-width="3"/>
+
+    <!-- Top paper lines -->
+    <rect x="314" y="192" width="148" height="18" rx="9" fill="#DCEBFF"/>
+    <rect x="314" y="242" width="268" height="18" rx="9" fill="#DCEBFF"/>
+
+    <!-- NH monogram: N diagonal attaches lower and slightly right into shared stem -->
+    <g fill="#1C6DFF">
+      <!-- Left vertical of N -->
+      <rect x="325" y="336" width="54" height="318" rx="27"/>
+
+      <!-- N diagonal, lower root shifted right into shared vertical -->
+      <path d="M356 336
+               C374 336 384 343 395 359
+               L541 596
+               C548 607 552 621 552 634
+               V636
+               C552 654 538 668 520 668
+               H500
+               C487 668 475 661 468 650
+               L337 441
+               C326 423 331 400 349 389
+               C363 380 382 383 393 396
+               L500 568
+               L500 336
+               H552
+               V626
+               C552 649 534 668 511 668
+               C496 668 482 660 474 647
+               L335 421
+               C323 401 329 375 349 363
+               C351 362 353 336 356 336Z"/>
+
+      <!-- Shared center stem: right side of N + left side of H -->
+      <rect x="500" y="336" width="54" height="332" rx="27"/>
+
+      <!-- H right vertical -->
+      <rect x="662" y="336" width="54" height="318" rx="27"/>
+
+      <!-- H crossbar -->
+      <rect x="544" y="470" width="145" height="54" rx="18"/>
+    </g>
+
+    <!-- Paper content cues -->
+    <rect x="308" y="698" width="136" height="112" rx="22" fill="#DCEBFF"/>
+    <rect x="476" y="702" width="286" height="18" rx="9" fill="#DCEBFF"/>
+    <rect x="476" y="748" width="286" height="18" rx="9" fill="#DCEBFF"/>
+    <rect x="476" y="794" width="200" height="18" rx="9" fill="#DCEBFF"/>
+    <rect x="308" y="850" width="454" height="18" rx="9" fill="#DCEBFF"/>
+  </g>
+</svg>

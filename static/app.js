@@ -227,6 +227,7 @@ els.fileInput.onchange = (e) => {
 );
 
 let pdfDoc = null;
+let currentPdfId = null;
 let zoom = 1; // 確定ズーム（ページはこの倍率で描画済み）
 let live = 1; // ジェスチャ中の一時的な見た目倍率（確定描画に対する相対）
 let natW = 0;
@@ -399,6 +400,7 @@ async function openPdfBuffer(buf, name, id) {
     return false;
   }
   pdfDoc = doc;
+  currentPdfId = id;
   zoom = 1;
   live = 1;
   els.pdfPane.scrollTop = 0;
@@ -1153,6 +1155,7 @@ const Ask = (() => {
   let history = []; // [{role:"user"|"model", text}] — PDF単位の会話履歴
   let quoted = ""; // いま引用中の選択テキスト（送信まで保持）
   let busy = false;
+  let paperCachedId = null; // サーバにキャッシュ済みの paper_id
 
   function autosize() {
     input.style.height = "auto";
@@ -1239,10 +1242,13 @@ const Ask = (() => {
     };
     els.results.addEventListener("scroll", onScroll);
     try {
+      const needPaper = paperCachedId !== currentPdfId;
+      const payload = { question: q, selection, history, paper_id: currentPdfId };
+      if (needPaper) payload.paper = paperFullText();
       const resp = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q, paper: paperFullText(), selection, history }),
+        body: JSON.stringify(payload),
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
@@ -1258,6 +1264,7 @@ const Ask = (() => {
         body.innerHTML = renderMarkdown(acc);
         if (pinBottom) els.results.scrollTop = els.results.scrollHeight;
       }
+      paperCachedId = currentPdfId;
       history.push({
         role: "user",
         text: (selection ? "（引用）" + selection + "\n" : "") + q,
@@ -1304,6 +1311,7 @@ const Ask = (() => {
 
   function reset() {
     history = [];
+    paperCachedId = null;
     setQuote("");
   }
 
@@ -2087,63 +2095,11 @@ const Memo = (() => {
   const previewEl = $("memoPreview");
   const previewBtn = $("memoPreviewBtn");
   const statusEl = $("memoStatus");
-  const labelEl = document.querySelector("#memoHead .memoLabel");
-  const tabsEl = $("memoTabs");
-  const memoView = $("memoMemoView");
-  const summaryView = $("memoSummaryView");
 
-  // DOM が古い（キャッシュ食い違い等）場合でも本体を巻き込まない
-  if (!panel || !toggle || !titleEl || !bodyEl || !summaryView) {
+  if (!panel || !toggle || !titleEl || !bodyEl) {
     console.warn("[memo] UI要素が見つからないためメモ機能を無効化（ハードリロード推奨）");
     return { openForPdf() {}, openExisting() {}, setOpen() {}, async flush() { return true; } };
   }
-
-  // 論文を構造的に把握するための6項目。key はサーバの SUMMARY_KEYS と一致させること。
-  const SUMMARY_FIELDS = [
-    ["what", "① どんなもの？", "この研究を一言で。何を達成したか。"],
-    ["prior", "② 先行研究と比べてどこがすごい？", "既存手法・従来研究との違い／優位点。"],
-    ["method", "③ 技術や手法のキモはどこ？", "提案手法の核となるアイデア・仕組み。"],
-    ["verify", "④ どうやって有効だと検証した？", "実験・データセット・評価指標と結果。"],
-    ["discuss", "⑤ 議論はある？", "限界・課題・著者や自分が感じた論点。"],
-    ["next", "⑥ 次に読むべき論文は？", "関連文献・次に読む対象。"],
-  ];
-
-  // summary タブの「質問 → メモ欄」ブロックを生成（key -> {ta, pv, cm}）
-  const cmOpts = {
-    mode: { name: "markdown", fencedCodeBlockHighlighting: false },
-    lineWrapping: true,
-    indentUnit: 2,
-    tabSize: 2,
-    indentWithTabs: false,
-    extraKeys: {
-      Enter: "newlineAndIndentContinueMarkdownList",
-      Tab: (c) => c.execCommand("indentMore"),
-      "Shift-Tab": (c) => c.execCommand("indentLess"),
-      "Shift-Cmd-H": cmToggleHeading,
-      "Shift-Ctrl-H": cmToggleHeading,
-    },
-  };
-  const sumFields = {};
-  for (const [key, q, ph] of SUMMARY_FIELDS) {
-    const block = document.createElement("div");
-    block.className = "summaryField";
-    const label = document.createElement("label");
-    label.textContent = q;
-    const ta = document.createElement("textarea");
-    ta.placeholder = ph;
-    ta.dataset.key = key;
-    const pv = document.createElement("div");
-    pv.className = "fieldPreview";
-    pv.hidden = true;
-    block.append(label, ta, pv);
-    summaryView.appendChild(block);
-    let scm = null;
-    if (window.CodeMirror) {
-      scm = CodeMirror.fromTextArea(ta, { ...cmOpts, placeholder: ph });
-    }
-    sumFields[key] = { ta, pv, cm: scm };
-  }
-  const eachSum = (fn) => SUMMARY_FIELDS.forEach(([k]) => fn(k, sumFields[k]));
 
   const emit = (name, detail) =>
     document.dispatchEvent(new CustomEvent(name, { detail }));
@@ -2155,8 +2111,7 @@ const Memo = (() => {
   let loadingSeq = 0;
   let saving = null;
   let preview = false;
-  let tab = "memo"; // "memo" | "summary"
-  let cm = null; // メモ本文の CodeMirror（未ロード時は null → textarea にフォールバック）
+  let cm = null;
 
   // 本文の読み書きは cm 経由（CM 不使用時は textarea）。以降この2つだけを使う。
   const getBody = () => (cm ? cm.getValue() : bodyEl.value);
@@ -2166,7 +2121,6 @@ const Memo = (() => {
   };
   const refreshCM = () => {
     if (cm) requestAnimationFrame(() => cm.refresh());
-    eachSum((_, f) => { if (f.cm) requestAnimationFrame(() => f.cm.refresh()); });
   };
 
   const stripExt = (n) => (n || "").replace(/\.pdf$/i, "");
@@ -2192,35 +2146,14 @@ const Memo = (() => {
       cm.setOption("readOnly", on ? false : "nocursor");
       cm.getWrapperElement().classList.toggle("cm-readonly", !on);
     }
-    eachSum((_, f) => {
-      if (f.cm) {
-        f.cm.setOption("readOnly", on ? false : "nocursor");
-        f.cm.getWrapperElement().classList.toggle("cm-readonly", !on);
-      } else {
-        f.ta.disabled = !on;
-      }
-    });
     const saveBtn = $("memoSaveBtn"); if (saveBtn) saveBtn.disabled = !on;
     $("memoDeleteBtn").disabled = !on;
-  }
-  const collectSummary = () => {
-    const o = {};
-    eachSum((k, f) => (o[k] = f.cm ? f.cm.getValue() : f.ta.value));
-    return o;
-  };
-  function fillSummary(s) {
-    s = s || {};
-    eachSum((k, f) => {
-      if (f.cm) f.cm.setValue(s[k] || "");
-      else f.ta.value = s[k] || "";
-    });
   }
 
   function load(note) {
     cur = { id: note.id, title: note.title || "", pdf: note.pdf || "" };
     titleEl.value = cur.title;
     setBody(note.body || "");
-    fillSummary(note.summary);
     dirty = false;
     dirtyVersion++;
     syncDirtyIndicator();
@@ -2234,7 +2167,6 @@ const Memo = (() => {
     cur = { id, title: stripExt(pdfName), pdf: pdfName };
     titleEl.value = cur.title;
     setBody("");
-    fillSummary(null);
     dirty = false;
     dirtyVersion++;
     syncDirtyIndicator();
@@ -2297,7 +2229,6 @@ const Memo = (() => {
       title: titleEl.value.trim() || "Untitled",
       body: getBody(),
       pdf,
-      summary: collectSummary(),
     };
     const version = dirtyVersion;
     saving = (async () => {
@@ -2336,10 +2267,6 @@ const Memo = (() => {
     previewEl.innerHTML = renderMarkdown(
       getBody() || "_（まだ何も書かれていません）_"
     );
-    eachSum((_, f) => {
-      const v = f.cm ? f.cm.getValue() : f.ta.value;
-      f.pv.innerHTML = v.trim() ? renderMarkdown(v) : "";
-    });
   }
   function setPreview(on) {
     preview = on;
@@ -2347,33 +2274,12 @@ const Memo = (() => {
     if (cm) cm.getWrapperElement().style.display = on ? "none" : "";
     else bodyEl.hidden = on;
     previewEl.hidden = !on;
-    eachSum((_, f) => {
-      if (f.cm) f.cm.getWrapperElement().style.display = on ? "none" : "";
-      else f.ta.hidden = on;
-      f.pv.hidden = !on;
-    });
     previewBtn.textContent = on ? "編集に戻る" : "プレビュー";
     if (on) renderPreview();
     else refreshCM();
   }
-  function setTab(name) {
-    tab = name === "summary" ? "summary" : "memo";
-    memoView.hidden = tab !== "memo";
-    summaryView.hidden = tab !== "summary";
-    tabsEl.querySelectorAll(".memoTab").forEach((b) =>
-      b.classList.toggle("active", b.dataset.tab === tab)
-    );
-    if (labelEl)
-      labelEl.textContent = tab === "summary" ? "🧩 まとめ" : "📝 このメモ";
-    localStorage.setItem("memoTab", tab);
-    if (tab === "memo") refreshCM(); // メモタブ表示時に CM を測り直す
-  }
-
   toggle.onclick = () => setOpen(!panel.classList.contains("open"));
   $("memoClose").onclick = () => setOpen(false);
-  tabsEl.querySelectorAll(".memoTab").forEach((b) => {
-    b.onclick = () => setTab(b.dataset.tab);
-  });
   titleEl.addEventListener("input", markDirty);
   // メモ本文: CodeMirror があればリッチ編集、無ければ従来の textarea。
   if (window.CodeMirror) {
@@ -2397,13 +2303,6 @@ const Memo = (() => {
     bodyEl.addEventListener("input", markDirty);
     attachListEditing(bodyEl);
   }
-  eachSum((_, f) => {
-    if (f.cm) f.cm.on("change", markDirty);
-    else {
-      f.ta.addEventListener("input", markDirty);
-      attachListEditing(f.ta);
-    }
-  });
   const memoSaveBtn = $("memoSaveBtn"); if (memoSaveBtn) memoSaveBtn.onclick = save;
   previewBtn.onclick = () => setPreview(!preview);
 
@@ -2447,7 +2346,6 @@ const Memo = (() => {
     cur = null;
     titleEl.value = "";
     setBody("");
-    fillSummary(null);
     setEditable(false);
     setStatus("削除しました");
     emit("memos-changed");
@@ -2497,7 +2395,6 @@ const Memo = (() => {
   const savedH = localStorage.getItem("memoH");
   if (savedH) panel.style.setProperty("--memo-h", savedH);
   setEditable(false);
-  setTab(localStorage.getItem("memoTab") || "memo");
   if (localStorage.getItem("memoPreview") === "1") setPreview(true);
   if (localStorage.getItem("memoOpen") === "1") setOpen(true);
 
@@ -2578,6 +2475,7 @@ const Memo = (() => {
         await fetch("/api/notes/" + n.id, { method: "DELETE" });
         if (n.id === activeId) {
           pdfDoc = null;
+          currentPdfId = null;
           els.container.innerHTML = '<div id="dropHint"><img class="drop-icon" src="/static/icon-64.png" width="64" height="64" alt="" /><p>PDFをここにドラッグ&ドロップ、または「📂 PDFを開く」</p></div>';
           els.fileName.textContent = "ファイル未選択";
           els.fileName.classList.add("muted");

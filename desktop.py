@@ -198,8 +198,9 @@ def _server_up() -> bool:
 
 def _update_loading(window, status: str, pct: int) -> None:
     try:
+        safe_status = json.dumps(status)
         window.evaluate_js(
-            f'document.getElementById("status").textContent = "{status}";'
+            f'document.getElementById("status").textContent = {safe_status};'
             f'document.getElementById("bar").style.width = "{pct}%";'
         )
     except Exception:  # noqa: BLE001

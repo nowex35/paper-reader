@@ -161,6 +161,8 @@ PDF_DIR = BASE_DIR / "pdfs"
 PDF_DIR.mkdir(exist_ok=True)
 MAX_PDF_BYTES = 200 * 1024 * 1024  # 200MB 上限（暴走防止）
 
+_paper_cache: dict[str, str] = {}  # paper_id → 論文全文。質問2回目以降の再送を省略
+
 def _is_japanese_text(text: str) -> bool:
     ja_count = sum(1 for c in text if '　' <= c <= '鿿' or '豈' <= c <= '﫿')
     alpha_count = sum(1 for c in text if c.isalpha())
@@ -543,11 +545,27 @@ def _fetch_provider_models(provider: str, api_key: str = "",
 app = FastAPI(title="Naruhodo")
 
 
+_ALLOWED_ORIGINS = {
+    "http://localhost",
+    "http://127.0.0.1",
+}
+
+
+def _origin_ok(request: Request) -> bool:
+    origin = request.headers.get("origin", "")
+    if not origin:
+        return True
+    base = re.sub(r":\d+$", "", origin)
+    return base in _ALLOWED_ORIGINS
+
+
 @app.middleware("http")
-async def no_cache(request, call_next):
-    """localhost専用の開発ツール。常に最新を配信し、キャッシュ食い違い事故を防ぐ。"""
+async def security_middleware(request, call_next):
+    if not _origin_ok(request):
+        return JSONResponse({"error": "origin not allowed"}, status_code=403)
     resp = await call_next(request)
-    resp.headers["Cache-Control"] = "no-store"
+    if request.url.path.startswith("/api/"):
+        resp.headers["Cache-Control"] = "no-store"
     return resp
 
 
@@ -750,6 +768,7 @@ def explain(req: ExplainRequest):
 class AskRequest(BaseModel):
     question: str
     paper: str = ""            # 論文全文（フロントが各ページ抽出テキストを結合して送る）
+    paper_id: str = ""         # PDF内容ハッシュ。2回目以降はpaperを省略しキャッシュから取得
     selection: str | None = None  # いま選択中の箇所（あれば質問対象として引用）
     history: list[dict] = []   # [{role: "user"|"model", text: str}, ...]
 
@@ -794,6 +813,7 @@ def _read_env_lines() -> list[str]:
 
 
 def _write_env_key(key: str, value: str) -> None:
+    value = value.replace("\r", "").replace("\n", "")
     lines = _read_env_lines()
     found = False
     for i, line in enumerate(lines):
@@ -852,6 +872,15 @@ def ask(req: AskRequest):
     if not question:
         return JSONResponse({"error": "質問が空です"}, status_code=400)
 
+    paper = (req.paper or "").strip()
+    pid = (req.paper_id or "").strip()
+    if paper and pid:
+        if len(_paper_cache) >= 20:
+            _paper_cache.pop(next(iter(_paper_cache)))
+        _paper_cache[pid] = paper
+    elif not paper and pid:
+        paper = _paper_cache.get(pid, "")
+
     def gen():
         status = ask_status_info()
         if not status["available"]:
@@ -862,7 +891,7 @@ def ask(req: AskRequest):
             yield f"> ⚠️ 未対応のプロバイダ: {ASK_PROVIDER}"
             return
         try:
-            yield from fn(question, req.paper, req.selection, req.history)
+            yield from fn(question, paper, req.selection, req.history)
         except Exception as e:  # noqa: BLE001
             yield f"\n\n> ⚠️ エラー: {type(e).__name__}: {e}"
 
@@ -876,67 +905,19 @@ def ask(req: AskRequest):
 ID_RE = re.compile(r"[0-9a-fA-F]{6,64}")
 FM_KEYS = ["id", "title", "pdf", "created", "updated"]
 
-# summary タブ = 落合フォーマット6項目。メモ本文とは別フィールドとして
-# 同じ .md 内の専用セクションに保存する（人が読めて、機械でも再パースできる）。
-# 6項目は落合陽一「先端技術とメディア表現1 #FTMA15」が出典（本ツールの考案ではない）:
-# https://www.slideshare.net/Ochyai/1-ftma15
-SUMMARY_FIELDS = [
-    ("what", "どんなもの？"),
-    ("prior", "先行研究と比べてどこがすごい？"),
-    ("method", "技術や手法のキモはどこ？"),
-    ("verify", "どうやって有効だと検証した？"),
-    ("discuss", "議論はある？"),
-    ("next", "次に読むべき論文は？"),
-]
-SUMMARY_KEYS = [k for k, _ in SUMMARY_FIELDS]
 SUMMARY_MARK = "<!--paper-reader:summary-->"
-_Q_RE = re.compile(r"^###\s.*<!--q:(\w+)-->\s*$")
 
 
 class NoteIn(BaseModel):
     title: str = "Untitled"
     body: str = ""
     pdf: str | None = None
-    summary: dict[str, str] | None = None
 
 
-def _empty_summary() -> dict:
-    return {k: "" for k in SUMMARY_KEYS}
-
-
-def _split_body(full: str) -> tuple[str, dict]:
-    """保存済み body を「メモ本文」と「summary(6項目)」に分離する。"""
-    summary = _empty_summary()
+def _strip_summary(full: str) -> str:
+    """旧 summary セクションを除いたメモ本文を返す（既存ノートとの後方互換）。"""
     idx = (full or "").find(SUMMARY_MARK)
-    if idx < 0:
-        return (full or "").rstrip(), summary
-    memo = full[:idx].rstrip()
-    cur, buf = None, []
-    for line in full[idx + len(SUMMARY_MARK):].split("\n"):
-        m = _Q_RE.match(line)
-        if m:
-            if cur in summary:
-                summary[cur] = "\n".join(buf).strip()
-            cur, buf = m.group(1), []
-        elif cur:
-            buf.append(line)
-    if cur in summary:
-        summary[cur] = "\n".join(buf).strip()
-    return memo, summary
-
-
-def _compose_body(memo: str, summary: dict | None) -> str:
-    """メモ本文と summary を結合し、保存用の body 文字列を作る。"""
-    memo = (memo or "").rstrip()
-    summary = summary or {}
-    if not any((summary.get(k) or "").strip() for k in SUMMARY_KEYS):
-        return memo  # summary 未記入なら従来どおりメモのみ
-    parts = [memo, "", SUMMARY_MARK, "", "## 📝 落合まとめ", ""]
-    for key, q in SUMMARY_FIELDS:
-        parts.append(f"### {q} <!--q:{key}-->")
-        parts.append((summary.get(key) or "").strip())
-        parts.append("")
-    return "\n".join(parts).rstrip()
+    return (full[:idx] if idx >= 0 else full or "").rstrip()
 
 
 def _valid_id(nid: str) -> bool:
@@ -992,7 +973,7 @@ def list_notes():
     out = []
     for p in NOTES_DIR.glob("*.md"):
         m, b = _parse(p)
-        memo, _ = _split_body(b)  # 一覧スニペットに summary を混ぜない
+        memo = _strip_summary(b)
         out.append({
             "id": m.get("id") or p.stem.rsplit("-", 1)[-1],
             "title": m.get("title") or p.stem,
@@ -1012,11 +993,11 @@ def get_note(nid: str):
     if not p:
         raise HTTPException(404, "note not found")
     m, b = _parse(p)
-    memo, summary = _split_body(b)
+    memo = _strip_summary(b)
     return {
         "id": nid, "title": m.get("title", ""), "pdf": m.get("pdf", ""),
         "created": m.get("created", ""), "updated": m.get("updated", ""),
-        "body": memo, "summary": summary, "filename": p.name,
+        "body": memo, "filename": p.name,
     }
 
 
@@ -1036,7 +1017,7 @@ def save_note(nid: str, note: NoteIn):
     if existing and existing != new_path:
         existing.unlink(missing_ok=True)
     meta = {"id": nid, "title": title, "pdf": pdf, "created": created, "updated": now}
-    _write(new_path, meta, _compose_body(note.body, note.summary))
+    _write(new_path, meta, (note.body or "").rstrip())
     return {"id": nid, "title": title, "pdf": pdf,
             "created": created, "updated": now, "filename": new_path.name}
 

@@ -213,14 +213,10 @@
         <button id="memoClose" aria-label="メモパネルを閉じる" title="閉じる">×</button>
       </div>
       <div id="memoStatusBar"><span id="memoStatus" class="muted" role="status" aria-live="polite"></span></div>
-      <div id="memoTabs" role="tablist" hidden></div>
-      <div id="memoEdit" class="memoView" role="tabpanel">
+      <div id="memoEdit">
         <input id="memoTitle" type="text" placeholder="論文タイトル（一覧の見出しになります）" aria-label="論文タイトル" />
-        <div id="memoMemoView">
-          <textarea id="memoBody" placeholder="自分の言葉でまとめる（Markdown可）。&#10;例: 何の問題を / どう解いた / 何が新しい / 自分の研究との関係 …" aria-label="メモ本文"></textarea>
-          <div id="memoPreview" hidden aria-label="メモプレビュー"></div>
-        </div>
-        <div id="memoSummaryView" hidden></div>
+        <textarea id="memoBody" placeholder="自分の言葉でまとめる（Markdown可）。&#10;例: 何の問題を / どう解いた / 何が新しい / 自分の研究との関係 …" aria-label="メモ本文"></textarea>
+        <div id="memoPreview" hidden aria-label="メモプレビュー"></div>
       </div>
     </section>
     <div id="memoResizer" class="col-resizer" role="separator" aria-orientation="vertical" aria-label="メモパネルの幅調整" hidden></div>

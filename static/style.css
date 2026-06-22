@@ -842,73 +842,8 @@ button.danger:hover { background: #fdecea; }
   min-height: 18px;
 }
 
-/* ---- memo / summary タブ ---- */
-#memoTabs {
-  display: flex;
-  gap: 4px;
-  padding: 6px 12px 0;
-  border-bottom: 1px solid #ececef;
-  flex: none;
-}
-.memoTab {
-  padding: 6px 14px;
-  font-size: 12.5px;
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: 7px 7px 0 0;
-  background: transparent;
-  color: #666;
-  margin-bottom: -1px;
-}
-.memoTab:hover { background: #f2f2f5; }
-.memoTab.active {
-  background: #fff;
-  color: #1c6dff;
-  font-weight: 600;
-  border-color: #ececef;
-}
-
-.memoView { flex: 1; min-height: 0; overflow: auto; padding: 12px 30px; }
-#memoEdit { display: flex; flex-direction: column; gap: 8px; }
-#memoMemoView { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-
-#memoSummaryView { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
-/* display:flex が [hidden] を打ち消すため、非表示を明示的に勝たせる */
-#memoMemoView[hidden], #memoSummaryView[hidden] { display: none; }
-.summaryHint { font-size: 12px; color: #9a9a9e; margin: -2px 0 2px; }
-.summaryField { display: flex; flex-direction: column; gap: 4px; }
-.summaryField > label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #333;
-}
-.summaryField textarea {
-  resize: vertical;
-  min-height: 56px;
-  font: 13.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
-  padding: 8px 14px;
-  border: 1px solid #d8d8dd;
-  border-radius: 7px;
-}
-.summaryField textarea:disabled { background: #f6f6f8; color: #9a9a9e; }
-.summaryField .CodeMirror {
-  min-height: 56px;
-  border: 1px solid #d8d8dd;
-  border-radius: 7px;
-  background: #fff;
-  font: 13.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #1d1d1f;
-}
-.summaryField .CodeMirror-scroll { padding: 6px 14px; }
-.summaryField .CodeMirror.cm-readonly { background: #f6f6f8; }
-.summaryField .fieldPreview {
-  font-size: 13.5px;
-  line-height: 1.7;
-  padding: 4px 2px;
-  border-left: 2px solid #ececef;
-  padding-left: 10px;
-}
-.summaryField .fieldPreview:empty::before { content: "（未記入）"; color: #bcbcc2; }
+/* ---- memo ---- */
+#memoEdit { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow: auto; padding: 12px 30px; }
 #memoTitle {
   font: inherit;
   font-size: 14px;
@@ -930,8 +865,8 @@ button.danger:hover { background: #fdecea; }
 #memoBody:disabled { background: #f6f6f8; color: #9a9a9e; }
 
 /* ---- メモ本文のリッチエディタ（CodeMirror） ---- */
-/* flex 親(#memoMemoView)を満たし、内部スクロールする */
-#memoMemoView .CodeMirror {
+/* flex 親(#memoEdit)を満たし、内部スクロールする */
+#memoEdit .CodeMirror {
   flex: 1;
   height: auto;
   min-height: 80px;
@@ -941,7 +876,7 @@ button.danger:hover { background: #fdecea; }
   font: var(--memo-font-size, 13.5px)/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #1d1d1f;
 }
-#memoMemoView .CodeMirror-scroll { padding: 6px 14px; }
+#memoEdit .CodeMirror-scroll { padding: 6px 14px; }
 /* 編集中も見出しは大きく・太字は太く表示 */
 .cm-s-default .cm-header { color: #1d1d1f; font-weight: 700; line-height: 1.3; }
 .cm-s-default .cm-header-1 { font-size: 1.55em; }
@@ -959,7 +894,7 @@ button.danger:hover { background: #fdecea; }
 /* 行頭の # や ** などの記法マーカーは少し控えめに */
 .cm-s-default .cm-formatting { color: #b0b0b8; font-weight: 400; }
 /* 読み取り専用（メモ未選択）時の見た目 */
-#memoMemoView .CodeMirror.cm-readonly { background: #f6f6f8; }
+#memoEdit .CodeMirror.cm-readonly { background: #f6f6f8; }
 #memoPreview {
   flex: 1;
   overflow: auto;
@@ -970,24 +905,17 @@ button.danger:hover { background: #fdecea; }
 #memoPreview code { background: #f0f0f3; padding: 1px 4px; border-radius: 4px; }
 #memoPreview ul { padding-left: 20px; }
 
-/* 見出しのサイズ階調（メモ本文プレビュー & summary各欄プレビュー共通） */
-#memoPreview :is(h1, h2, h3, h4, h5, h6),
-.summaryField .fieldPreview :is(h1, h2, h3, h4, h5, h6) {
+#memoPreview :is(h1, h2, h3, h4, h5, h6) {
   font-weight: 700;
   line-height: 1.35;
   margin: 14px 0 6px;
 }
-#memoPreview h1, .summaryField .fieldPreview h1 { font-size: 1.55em; }
-#memoPreview h2, .summaryField .fieldPreview h2 { font-size: 1.3em; }
-#memoPreview h3, .summaryField .fieldPreview h3 { font-size: 1.12em; }
-#memoPreview h4, .summaryField .fieldPreview h4 { font-size: 1em; }
-#memoPreview h5, .summaryField .fieldPreview h5,
-#memoPreview h6, .summaryField .fieldPreview h6 { font-size: .92em; color: #6a6a70; }
-/* 先頭の見出しは上マージンを詰める */
-#memoPreview :is(h1, h2, h3, h4, h5, h6):first-child,
-.summaryField .fieldPreview :is(h1, h2, h3, h4, h5, h6):first-child { margin-top: 2px; }
-
-.memoLabel { font-size: 13px; color: #444; }
+#memoPreview h1 { font-size: 1.55em; }
+#memoPreview h2 { font-size: 1.3em; }
+#memoPreview h3 { font-size: 1.12em; }
+#memoPreview h4 { font-size: 1em; }
+#memoPreview h5, #memoPreview h6 { font-size: .92em; color: #6a6a70; }
+#memoPreview :is(h1, h2, h3, h4, h5, h6):first-child { margin-top: 2px; }
 
 /* ---- 左サイドバー: 読んだ論文の一覧（ChatGPT風） ---- */
 
