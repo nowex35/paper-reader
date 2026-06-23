@@ -290,7 +290,7 @@ def _boot(window) -> None:
 
     # 5. Sparkle アップデートチェック
     if _sparkle_updater is not None:
-        _sparkle_updater.checkForUpdates()
+        _sparkle_updater.checkForUpdatesInBackground()
         print("[naruhodo] Sparkle update check triggered")
 
 
