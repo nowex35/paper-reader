@@ -71,13 +71,14 @@ body {
   position: relative;
   z-index: 100;
 }
+#topbar > * { flex-shrink: 0; }
 #topbar .spacer { flex: 1; min-width: 4px; }
 #fileName {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
-  flex-shrink: 1;
+  min-width: 60px;
+  flex: 1 1 0;
 }
 .muted { color: #8a8a8e; font-size: 13px; }
 button {
