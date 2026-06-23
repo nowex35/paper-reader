@@ -101,6 +101,15 @@ if [ -n "$SPARKLE_PUBLIC_KEY" ]; then
   mkdir -p "$APP/Contents/Frameworks"
   cp -R "$WORK/sparkle/Sparkle.framework" "$APP/Contents/Frameworks/"
   rm -rf "$WORK/sparkle"
+
+  # Sparkle の日本語 UI 文言をカスタマイズ
+  JA_LPROJ="$APP/Contents/Frameworks/Sparkle.framework/Resources/ja.lproj"
+  mkdir -p "$JA_LPROJ"
+  cat > "$JA_LPROJ/Sparkle.strings" <<'STRINGS'
+"Automatically download and install updates in the future" = "今後は自動でアップデートをインストールする";
+"Skip This Version" = "あとで通知";
+"Remind Me Later" = "あとで通知";
+STRINGS
 fi
 
 # ---- ランチャスクリプト（自己完結・初回セットアップ付き） ----
