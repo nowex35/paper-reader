@@ -98,6 +98,13 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           VERSION="${TAG#v}"
           BUILD=$(git rev-list HEAD --count)
+
+          RELEASE_NOTES=$(gh release view "$TAG" --json body -q .body 2>/dev/null || echo "")
+          NOTES_HTML=""
+          if [ -n "$RELEASE_NOTES" ]; then
+            NOTES_HTML=$(echo "$RELEASE_NOTES" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/$/<br\/>/')
+          fi
+
           cat > appcast.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -108,6 +115,7 @@ jobs:
                 <sparkle:version>${BUILD}</sparkle:version>
                 <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
                 <pubDate>$(date -R)</pubDate>
+                <description><![CDATA[${NOTES_HTML}]]></description>
                 <enclosure url="https://github.com/nowex35/paper-reader/releases/download/${TAG}/Naruhodo.zip"
                            sparkle:edSignature="${ED_SIGNATURE}"
                            length="${ZIP_LENGTH}"
