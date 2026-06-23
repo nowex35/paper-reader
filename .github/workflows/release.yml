@@ -79,7 +79,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          CHANGELOG=$(git tag -l --format='%(contents)' "$TAG" | sed '/^$/d')
+          CHANGELOG=$(git for-each-ref --format='%(contents)' "refs/tags/$TAG" | sed '/^$/d')
           if [ -z "$CHANGELOG" ]; then
             CHANGELOG="バグ修正と改善"
           fi
@@ -103,7 +103,7 @@ jobs:
           VERSION="${TAG#v}"
           BUILD=$(git rev-list HEAD --count)
 
-          CHANGELOG=$(git tag -l --format='%(contents)' "$TAG" | sed '/^$/d')
+          CHANGELOG=$(git for-each-ref --format='%(contents)' "refs/tags/$TAG" | sed '/^$/d')
           if [ -z "$CHANGELOG" ]; then
             CHANGELOG="バグ修正と改善"
           fi
