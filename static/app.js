@@ -538,7 +538,7 @@ els.pdfPane.addEventListener(
     const r = els.pdfPane.getBoundingClientRect();
     const isWheel = Math.abs(e.deltaY) > 10;
     const factor = isWheel
-      ? (e.deltaY > 0 ? 1 / 1.15 : 1.15)
+      ? (e.deltaY > 0 ? 1 / 1.10 : 1.10)
       : Math.exp(-e.deltaY * 0.01);
     liveZoom(
       zoom * live * factor,
