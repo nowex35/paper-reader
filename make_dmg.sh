@@ -98,6 +98,7 @@ if [ -n "$SPARKLE_PUBLIC_KEY" ]; then
     | tar xJ -C "$WORK/sparkle"
   mkdir -p "$APP/Contents/Frameworks"
   cp -R "$WORK/sparkle/Sparkle.framework" "$APP/Contents/Frameworks/"
+  rm -rf "$WORK/sparkle"
 fi
 
 # ---- ランチャスクリプト（自己完結・初回セットアップ付き） ----
