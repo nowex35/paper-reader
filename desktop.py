@@ -217,11 +217,17 @@ def _init_sparkle() -> None:
         import objc
         from PyObjCTools import AppHelper
         objc.loadBundle("Sparkle", globals(), bundle_path=sparkle_path)
-        SPUStandardUpdaterController = objc.lookUpClass("SPUStandardUpdaterController")
+        NSBundle = objc.lookUpClass("NSBundle")
+        SPUUpdater = objc.lookUpClass("SPUUpdater")
+        SPUStandardUserDriver = objc.lookUpClass("SPUStandardUserDriver")
 
         def _start_updater():
-            SPUStandardUpdaterController.alloc() \
-                .initWithStartingUpdater_updaterDelegate_userDriverDelegate_(True, None, None)
+            host = NSBundle.bundleWithPath_(bundle_path)
+            driver = SPUStandardUserDriver.alloc().initWithHostBundle_(host)
+            updater = SPUUpdater.alloc() \
+                .initWithHostBundle_applicationBundle_userDriver_delegate_(
+                    host, host, driver, None)
+            updater.startUpdater_(None)
             print("[naruhodo] Sparkle updater started")
 
         AppHelper.callAfter(_start_updater)
