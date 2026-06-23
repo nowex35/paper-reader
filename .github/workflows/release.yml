@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pages: write
 
 jobs:
   build:
@@ -14,6 +15,8 @@ jobs:
     environment: release
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install create-dmg
         run: brew install create-dmg
@@ -50,20 +53,76 @@ jobs:
         env:
           DEVELOPER_ID: ${{ secrets.DEVELOPER_ID }}
           NOTARY_PROFILE: naruhodo
+          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
         run: bash make_dmg.sh
 
-      - name: Upload DMG to Release
+      - name: Sign update with Sparkle EdDSA
+        if: env.SPARKLE_EDDSA_KEY != ''
+        env:
+          SPARKLE_EDDSA_KEY: ${{ secrets.SPARKLE_EDDSA_KEY }}
+        run: |
+          SPARKLE_VER="2.9.3"
+          SIGN_TOOL="/tmp/sparkle/bin/sign_update"
+          if [ ! -x "$SIGN_TOOL" ]; then
+            mkdir -p /tmp/sparkle
+            curl -sL "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VER/Sparkle-$SPARKLE_VER.tar.xz" \
+              | tar xJ -C /tmp/sparkle
+          fi
+          SIGN_OUTPUT=$("$SIGN_TOOL" Naruhodo.zip --ed-key-file <(echo "$SPARKLE_EDDSA_KEY"))
+          ED_SIGNATURE=$(echo "$SIGN_OUTPUT" | grep -o 'sparkle:edSignature="[^"]*"' | cut -d'"' -f2)
+          LENGTH=$(stat -f%z Naruhodo.zip)
+          echo "ED_SIGNATURE=$ED_SIGNATURE" >> "$GITHUB_ENV"
+          echo "ZIP_LENGTH=$LENGTH" >> "$GITHUB_ENV"
+
+      - name: Upload DMG & zip to Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          # Create release if it doesn't exist yet
           gh release create "$TAG" \
             --title "Naruhodo $TAG" \
             --generate-notes \
             --draft \
             2>/dev/null || true
-          # Upload (overwrite if re-run)
           gh release upload "$TAG" Naruhodo.dmg --clobber
-          # Publish the draft
+          if [ -f Naruhodo.zip ]; then
+            gh release upload "$TAG" Naruhodo.zip --clobber
+          fi
           gh release edit "$TAG" --draft=false
+
+      - name: Generate & publish appcast.xml
+        if: env.ED_SIGNATURE != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          BUILD=$(git rev-list HEAD --count)
+          cat > appcast.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <channel>
+              <title>Naruhodo</title>
+              <item>
+                <title>Version ${VERSION}</title>
+                <sparkle:version>${BUILD}</sparkle:version>
+                <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+                <pubDate>$(date -R)</pubDate>
+                <enclosure url="https://github.com/nowex35/paper-reader/releases/download/${TAG}/Naruhodo.zip"
+                           sparkle:edSignature="${ED_SIGNATURE}"
+                           length="${ZIP_LENGTH}"
+                           type="application/octet-stream" />
+              </item>
+            </channel>
+          </rss>
+          EOF
+          sed -i '' 's/^          //' appcast.xml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan gh-pages-tmp
+          git rm -rf . > /dev/null 2>&1 || true
+          mv appcast.xml .
+          git add appcast.xml
+          git commit -m "appcast: $TAG"
+          git push origin gh-pages-tmp:gh-pages --force
