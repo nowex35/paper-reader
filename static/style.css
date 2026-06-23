@@ -735,7 +735,7 @@ button:hover { background: #f0f0f3; }
 #memoSaveBtn:hover { text-decoration: underline; }
 #memoSaveBtn:disabled { color: #b0b0b4; text-decoration: none; cursor: default; }
 button.danger { color: #c0362c; border-color: #e3b4af; }
-button.danger:hover { background: #fdecea; }
+button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
 
 /* -- standard layout: memo は下パネル -- */
 [data-layout="standard"] #memoPanel {
