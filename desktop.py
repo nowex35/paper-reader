@@ -208,30 +208,30 @@ def _update_loading(window, status: str, pct: int) -> None:
 
 
 
+_sparkle_updater = None
+
+
 def _init_sparkle() -> None:
+    """Sparkle を初期化する。webview.start() の前に呼ぶこと。"""
+    global _sparkle_updater
     bundle_path = os.environ.get("NARUHODO_BUNDLE_PATH", "")
     sparkle_path = os.path.join(bundle_path, "Contents", "Frameworks", "Sparkle.framework")
     if not bundle_path or not os.path.isdir(sparkle_path):
         return
     try:
         import objc
-        from PyObjCTools import AppHelper
         objc.loadBundle("Sparkle", globals(), bundle_path=sparkle_path)
         NSBundle = objc.lookUpClass("NSBundle")
         SPUUpdater = objc.lookUpClass("SPUUpdater")
         SPUStandardUserDriver = objc.lookUpClass("SPUStandardUserDriver")
 
-        def _start_updater():
-            host = NSBundle.bundleWithPath_(bundle_path)
-            driver = SPUStandardUserDriver.alloc().initWithHostBundle_delegate_(host, None)
-            updater = SPUUpdater.alloc() \
-                .initWithHostBundle_applicationBundle_userDriver_delegate_(
-                    host, host, driver, None)
-            updater.startUpdater_(None)
-            updater.checkForUpdatesInBackground()
-            print(f"[naruhodo] Sparkle updater started (feed={updater.feedURL()})")
-
-        AppHelper.callAfter(_start_updater)
+        host = NSBundle.bundleWithPath_(bundle_path)
+        driver = SPUStandardUserDriver.alloc().initWithHostBundle_delegate_(host, None)
+        _sparkle_updater = SPUUpdater.alloc() \
+            .initWithHostBundle_applicationBundle_userDriver_delegate_(
+                host, host, driver, None)
+        _sparkle_updater.startUpdater_(None)
+        print(f"[naruhodo] Sparkle updater ready (feed={_sparkle_updater.feedURL()})")
     except Exception as e:  # noqa: BLE001
         print(f"[naruhodo] Sparkle init skipped: {e}")
 
@@ -288,12 +288,16 @@ def _boot(window) -> None:
     # 4. 本体へ遷移
     window.load_url(f"http://127.0.0.1:{PORT}")
 
-    # 5. Sparkle 自動アップデート（.app バンドルに Sparkle.framework がある場合のみ）
-    _init_sparkle()
+    # 5. Sparkle アップデートチェック
+    if _sparkle_updater is not None:
+        _sparkle_updater.checkForUpdates()
+        print("[naruhodo] Sparkle update check triggered")
 
 
 def main() -> None:
     print(f"[naruhodo] starting on port {PORT}")
+    _init_sparkle()
+
     import webview
 
     window = webview.create_window(

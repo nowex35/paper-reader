@@ -79,9 +79,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CHANGELOG=""
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges \
+              | grep -v "Co-Authored-By" | grep -v "^$")
+          fi
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="- Bug fixes and improvements"
+          fi
           gh release create "$TAG" \
             --title "Naruhodo $TAG" \
-            --generate-notes \
+            --notes "$CHANGELOG" \
             --draft \
             2>/dev/null || true
           gh release upload "$TAG" Naruhodo.dmg --clobber
@@ -99,10 +108,13 @@ jobs:
           VERSION="${TAG#v}"
           BUILD=$(git rev-list HEAD --count)
 
-          RELEASE_NOTES=$(gh release view "$TAG" --json body -q .body 2>/dev/null || echo "")
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           NOTES_HTML=""
-          if [ -n "$RELEASE_NOTES" ]; then
-            NOTES_HTML=$(echo "$RELEASE_NOTES" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/$/<br\/>/')
+          if [ -n "$PREV_TAG" ]; then
+            NOTES_HTML=$(git log "${PREV_TAG}..HEAD" --pretty=format:"%s" --no-merges \
+              | grep -v "Co-Authored-By" \
+              | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/^/<li>/; s/$/<\/li>/')
+            NOTES_HTML="<ul>${NOTES_HTML}</ul>"
           fi
 
           cat > appcast.xml <<EOF
