@@ -112,16 +112,19 @@ if [ -n "$SPARKLE_PUBLIC_KEY" ]; then
 STRINGS
 fi
 
-# ---- ランチャスクリプト（自己完結・初回セットアップ付き） ----
-cat > "$APP/Contents/MacOS/naruhodo" <<'LAUNCHER'
-#!/bin/bash
-# Naruhodo ランチャ — 初回起動時に環境を自動構築する。
+# ---- ネイティブランチャ（Sparkle XPC 署名検証のため） ----
+echo "🔨 ネイティブランチャをコンパイル中…"
+cc -o "$APP/Contents/MacOS/naruhodo" \
+   -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 \
+   "$SRCDIR/launcher.c"
 
+# ---- セットアップスクリプト（ネイティブランチャから呼ばれる） ----
+cat > "$APP/Contents/MacOS/naruhodo-setup.sh" <<'SETUP'
+#!/bin/bash
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 eval "$(brew shellenv 2>/dev/null)" || true
 
-BUNDLE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-export NARUHODO_BUNDLE_PATH="$BUNDLE_DIR"
+BUNDLE_DIR="$NARUHODO_BUNDLE_PATH"
 RESOURCES="$BUNDLE_DIR/Contents/Resources"
 APPDATA="$HOME/Library/Application Support/Naruhodo"
 LOG="$APPDATA/naruhodo.log"
@@ -213,11 +216,9 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# ---- 起動 ----
 log "Starting app..."
-exec "$APPDATA/.venv/bin/python" -u "$APPDATA/desktop.py" >> "$LOG" 2>&1
-LAUNCHER
-chmod +x "$APP/Contents/MacOS/naruhodo"
+SETUP
+chmod +x "$APP/Contents/MacOS/naruhodo-setup.sh"
 
 # ---- 署名 ----
 DEVELOPER_ID="${DEVELOPER_ID:-}"
