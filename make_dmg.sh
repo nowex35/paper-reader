@@ -33,12 +33,16 @@ WORK=$(mktemp -d)
 APP="$WORK/Naruhodo.app"
 DMG="$SRCDIR/Naruhodo.dmg"
 
+VERSION="${VERSION:-$(git -C "$SRCDIR" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo '0.0.0')}"
+BUILD="${BUILD:-$(git -C "$SRCDIR" rev-list HEAD --count 2>/dev/null || echo '1')}"
+SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-}"
+
 echo "📦 Naruhodo.app をパッケージング中…"
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/app"
 
 # ---- Info.plist ----
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -46,8 +50,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleName</key><string>Naruhodo</string>
   <key>CFBundleDisplayName</key><string>Naruhodo</string>
   <key>CFBundleIdentifier</key><string>local.naruhodo</string>
-  <key>CFBundleVersion</key><string>1.0</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>CFBundleVersion</key><string>$BUILD</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleExecutable</key><string>naruhodo</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
@@ -56,6 +60,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+
+if [ -n "$SPARKLE_PUBLIC_KEY" ]; then
+  /usr/libexec/PlistBuddy -c "Add :SUFeedURL string 'https://nowex35.github.io/paper-reader/appcast.xml'" "$APP/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string '$SPARKLE_PUBLIC_KEY'" "$APP/Contents/Info.plist"
+fi
 
 # ---- アイコン ----
 if [ -f "$SRCDIR/icon.icns" ]; then
@@ -80,6 +89,17 @@ mkdir -p "$APP/Contents/Resources/app/bookmarks"
 mkdir -p "$APP/Contents/Resources/app/conversations"
 mkdir -p "$APP/Contents/Resources/app/pdfs"
 
+# ---- Sparkle.framework（自動アップデート） ----
+if [ -n "$SPARKLE_PUBLIC_KEY" ]; then
+  SPARKLE_VER="2.9.3"
+  echo "🔄 Sparkle $SPARKLE_VER をダウンロード中…"
+  mkdir -p "$WORK/sparkle"
+  curl -sL "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VER/Sparkle-$SPARKLE_VER.tar.xz" \
+    | tar xJ -C "$WORK/sparkle"
+  mkdir -p "$APP/Contents/Frameworks"
+  cp -R "$WORK/sparkle/Sparkle.framework" "$APP/Contents/Frameworks/"
+fi
+
 # ---- ランチャスクリプト（自己完結・初回セットアップ付き） ----
 cat > "$APP/Contents/MacOS/naruhodo" <<'LAUNCHER'
 #!/bin/bash
@@ -88,7 +108,9 @@ cat > "$APP/Contents/MacOS/naruhodo" <<'LAUNCHER'
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 eval "$(brew shellenv 2>/dev/null)" || true
 
-RESOURCES="$(dirname "$0")/../Resources"
+BUNDLE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+export NARUHODO_BUNDLE_PATH="$BUNDLE_DIR"
+RESOURCES="$BUNDLE_DIR/Contents/Resources"
 APPDATA="$HOME/Library/Application Support/Naruhodo"
 LOG="$APPDATA/naruhodo.log"
 
@@ -191,13 +213,22 @@ NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 
 if [ -n "$DEVELOPER_ID" ]; then
   echo "🔏 Developer ID で署名中…"
-  codesign --force --deep --options runtime --sign "$DEVELOPER_ID" "$APP" 2>&1
+  if [ -d "$APP/Contents/Frameworks/Sparkle.framework" ]; then
+    codesign --force --options runtime --sign "$DEVELOPER_ID" "$APP/Contents/Frameworks/Sparkle.framework" 2>&1
+  fi
+  codesign --force --options runtime --sign "$DEVELOPER_ID" "$APP" 2>&1
   codesign --verify --deep --strict "$APP" 2>&1
   echo "   署名OK: $DEVELOPER_ID"
 else
   echo "⚠️  DEVELOPER_ID 未設定 → ad-hoc 署名（自分用ビルド。他人に渡すと Gatekeeper 警告が出ます）"
   codesign --force --deep --sign - "$APP" 2>&1 || echo "   codesign スキップ"
   xattr -cr "$APP" 2>/dev/null || true
+fi
+
+# ---- Sparkle 用 zip（CI で EdDSA 署名される） ----
+if [ -n "$SPARKLE_PUBLIC_KEY" ]; then
+  echo "📦 Sparkle アップデート用 zip を作成中…"
+  ditto -c -k --sequesterRsrc --keepParent "$APP" "$SRCDIR/Naruhodo.zip"
 fi
 
 # ---- DMG 作成（create-dmg で背景画像＋アイコン配置） ----

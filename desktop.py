@@ -208,6 +208,27 @@ def _update_loading(window, status: str, pct: int) -> None:
 
 
 
+def _init_sparkle() -> None:
+    bundle_path = os.environ.get("NARUHODO_BUNDLE_PATH", "")
+    sparkle_path = os.path.join(bundle_path, "Contents", "Frameworks", "Sparkle.framework")
+    if not bundle_path or not os.path.isdir(sparkle_path):
+        return
+    try:
+        import objc
+        from PyObjCTools import AppHelper
+        objc.loadBundle("Sparkle", globals(), bundle_path=sparkle_path)
+        SPUStandardUpdaterController = objc.lookUpClass("SPUStandardUpdaterController")
+
+        def _start_updater():
+            SPUStandardUpdaterController.alloc() \
+                .initWithStartingUpdater_updaterDelegate_userDriverDelegate_(True, None, None)
+            print("[naruhodo] Sparkle updater started")
+
+        AppHelper.callAfter(_start_updater)
+    except Exception as e:  # noqa: BLE001
+        print(f"[naruhodo] Sparkle init skipped: {e}")
+
+
 def _boot(window) -> None:
     """バックグラウンドで全セットアップを行い、完了後に本体へ遷移する。"""
     # 1. Ollama 確認・起動
@@ -259,6 +280,9 @@ def _boot(window) -> None:
 
     # 4. 本体へ遷移
     window.load_url(f"http://127.0.0.1:{PORT}")
+
+    # 5. Sparkle 自動アップデート（.app バンドルに Sparkle.framework がある場合のみ）
+    _init_sparkle()
 
 
 def main() -> None:
