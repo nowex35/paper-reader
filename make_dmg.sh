@@ -253,9 +253,16 @@ rm -rf "$WORK"
 if [ -n "$DEVELOPER_ID" ] && [ -n "$NOTARY_PROFILE" ]; then
   echo ""
   echo "📤 Apple に公証を提出中（数分かかります）…"
-  xcrun notarytool submit "$DMG" \
+  SUBMIT_OUT=$(xcrun notarytool submit "$DMG" \
     --keychain-profile "$NOTARY_PROFILE" \
-    --wait 2>&1
+    --wait 2>&1)
+  echo "$SUBMIT_OUT"
+  SUBMISSION_ID=$(echo "$SUBMIT_OUT" | grep '  id:' | head -1 | awk '{print $2}')
+  if echo "$SUBMIT_OUT" | grep -q "status: Invalid"; then
+    echo "❌ 公証が拒否されました。詳細ログ:"
+    xcrun notarytool log "$SUBMISSION_ID" --keychain-profile "$NOTARY_PROFILE" 2>&1
+    exit 1
+  fi
   echo "📎 公証チケットを DMG に添付中…"
   xcrun stapler staple "$DMG" 2>&1
   echo ""
