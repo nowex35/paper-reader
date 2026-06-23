@@ -228,6 +228,7 @@ def _init_sparkle() -> None:
                 .initWithHostBundle_applicationBundle_userDriver_delegate_(
                     host, host, driver, None)
             updater.startUpdater_(None)
+            updater.checkForUpdatesInBackground()
             print("[naruhodo] Sparkle updater started")
 
         AppHelper.callAfter(_start_updater)
