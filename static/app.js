@@ -2641,7 +2641,7 @@ const Memo = (() => {
     } catch {}
   }
 
-  btn.onclick = () => {
+  function toggle() {
     const cur = document.body.dataset.layout || "standard";
     const next = cur === "standard" ? "columns" : "standard";
     apply(next);
@@ -2650,7 +2650,18 @@ const Memo = (() => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ layout: next }),
     }).catch(() => {});
-  };
+  }
+
+  btn.onclick = toggle;
+
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "l") {
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      e.preventDefault();
+      toggle();
+    }
+  });
 
   load();
 })();
