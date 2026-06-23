@@ -79,7 +79,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          CHANGELOG=$(git for-each-ref --format='%(contents)' "refs/tags/$TAG" | sed '/^$/d')
+          TAG_TYPE=$(git cat-file -t "refs/tags/$TAG" 2>/dev/null || echo "commit")
+          if [ "$TAG_TYPE" = "tag" ]; then
+            CHANGELOG=$(git cat-file -p "refs/tags/$TAG" | sed '1,/^$/d' | sed '/^$/d')
+          else
+            CHANGELOG=""
+          fi
           if [ -z "$CHANGELOG" ]; then
             CHANGELOG="バグ修正と改善"
           fi
@@ -103,7 +108,12 @@ jobs:
           VERSION="${TAG#v}"
           BUILD=$(git rev-list HEAD --count)
 
-          CHANGELOG=$(git for-each-ref --format='%(contents)' "refs/tags/$TAG" | sed '/^$/d')
+          TAG_TYPE=$(git cat-file -t "refs/tags/$TAG" 2>/dev/null || echo "commit")
+          if [ "$TAG_TYPE" = "tag" ]; then
+            CHANGELOG=$(git cat-file -p "refs/tags/$TAG" | sed '1,/^$/d' | sed '/^$/d')
+          else
+            CHANGELOG=""
+          fi
           if [ -z "$CHANGELOG" ]; then
             CHANGELOG="バグ修正と改善"
           fi
