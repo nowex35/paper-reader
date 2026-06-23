@@ -53,9 +53,9 @@ int main(int argc, char *argv[]) {
 
     setenv("NARUHODO_BUNDLE_PATH", bundle_resolved, 1);
 
-    /* setup.sh のパスを構築 */
+    /* setup.sh のパスを構築（Resources 内） */
     char setup_path[PATH_MAX];
-    snprintf(setup_path, sizeof(setup_path), "%s/naruhodo-setup.sh", macos_dir);
+    snprintf(setup_path, sizeof(setup_path), "%s/Resources/naruhodo-setup.sh", contents_resolved);
 
     /* セットアップスクリプトを実行（同期） */
     pid_t setup_pid = fork();

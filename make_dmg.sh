@@ -119,7 +119,7 @@ cc -o "$APP/Contents/MacOS/naruhodo" \
    "$SRCDIR/launcher.c"
 
 # ---- セットアップスクリプト（ネイティブランチャから呼ばれる） ----
-cat > "$APP/Contents/MacOS/naruhodo-setup.sh" <<'SETUP'
+cat > "$APP/Contents/Resources/naruhodo-setup.sh" <<'SETUP'
 #!/bin/bash
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 eval "$(brew shellenv 2>/dev/null)" || true
@@ -218,7 +218,7 @@ fi
 
 log "Starting app..."
 SETUP
-chmod +x "$APP/Contents/MacOS/naruhodo-setup.sh"
+chmod +x "$APP/Contents/Resources/naruhodo-setup.sh"
 
 # ---- 署名 ----
 DEVELOPER_ID="${DEVELOPER_ID:-}"
