@@ -2655,7 +2655,7 @@ const Memo = (() => {
   btn.onclick = toggle;
 
   document.addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "l") {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === ".") {
       const t = e.target;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       e.preventDefault();
