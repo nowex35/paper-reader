@@ -79,6 +79,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
+          git fetch --tags --force
           TAG_TYPE=$(git cat-file -t "refs/tags/$TAG" 2>/dev/null || echo "commit")
           if [ "$TAG_TYPE" = "tag" ]; then
             CHANGELOG=$(git cat-file -p "refs/tags/$TAG" | sed '1,/^$/d' | sed '/^$/d')
