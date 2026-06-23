@@ -223,13 +223,13 @@ def _init_sparkle() -> None:
 
         def _start_updater():
             host = NSBundle.bundleWithPath_(bundle_path)
-            driver = SPUStandardUserDriver.alloc().initWithHostBundle_(host)
+            driver = SPUStandardUserDriver.alloc().initWithHostBundle_delegate_(host, None)
             updater = SPUUpdater.alloc() \
                 .initWithHostBundle_applicationBundle_userDriver_delegate_(
                     host, host, driver, None)
             updater.startUpdater_(None)
             updater.checkForUpdatesInBackground()
-            print("[naruhodo] Sparkle updater started")
+            print(f"[naruhodo] Sparkle updater started (feed={updater.feedURL()})")
 
         AppHelper.callAfter(_start_updater)
     except Exception as e:  # noqa: BLE001
