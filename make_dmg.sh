@@ -214,12 +214,7 @@ NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 if [ -n "$DEVELOPER_ID" ]; then
   echo "🔏 Developer ID で署名中…"
   if [ -d "$APP/Contents/Frameworks/Sparkle.framework" ]; then
-    find "$APP/Contents/Frameworks/Sparkle.framework" \
-      \( -name '*.xpc' -o -name 'Autoupdate' -o -name '*.app' -o -name '*.dylib' \) \
-      -print0 | while IFS= read -r -d '' comp; do
-        codesign --force --options runtime --sign "$DEVELOPER_ID" "$comp" 2>&1
-      done
-    codesign --force --options runtime --sign "$DEVELOPER_ID" "$APP/Contents/Frameworks/Sparkle.framework" 2>&1
+    codesign --force --deep --options runtime --sign "$DEVELOPER_ID" "$APP/Contents/Frameworks/Sparkle.framework" 2>&1
   fi
   codesign --force --options runtime --sign "$DEVELOPER_ID" "$APP" 2>&1
   codesign --verify --deep --strict "$APP" 2>&1
