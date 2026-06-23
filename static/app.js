@@ -251,6 +251,7 @@ function resetLive() {
   live = 1;
   els.container.style.transform = "";
   els.container.style.width = "";
+  els.container.style.minWidth = "";
   els.viewport.style.display = ""; // CSS の display:contents に戻す
   els.viewport.style.width = "";
   els.viewport.style.height = "";
@@ -476,6 +477,7 @@ function liveZoom(targetEff, cxv, cyv) {
   const ratio = live / sOld;
 
   els.container.style.width = natW + "px";
+  els.container.style.minWidth = "0";
   els.container.style.transform = `scale(${live})`;
   els.container.style.transformOrigin = "0 0";
   els.viewport.style.display = "block";
