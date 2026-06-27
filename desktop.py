@@ -6,9 +6,11 @@
 ターミナル不要。ログは .app.log に出る。
 """
 
+import atexit
 import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import threading
@@ -19,6 +21,10 @@ import uvicorn
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_MODEL = "qwen3.5:4b"
+
+_we_started_ollama = False
+_ollama_proc: subprocess.Popen | None = None
+_cleanup_done = False
 
 
 def _icon_data_uri() -> str:
@@ -250,8 +256,12 @@ def _boot(window) -> None:
             if os.path.isdir("/Applications/Ollama.app"):
                 subprocess.Popen(["open", "-a", "Ollama"])
             elif shutil.which("ollama"):
-                subprocess.Popen(["ollama", "serve"],
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                global _ollama_proc
+                _ollama_proc = subprocess.Popen(
+                    ["ollama", "serve"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            global _we_started_ollama
+            _we_started_ollama = True
         except Exception:  # noqa: BLE001
             pass
         for i in range(30):
@@ -294,9 +304,51 @@ def _boot(window) -> None:
         print("[naruhodo] Sparkle update check triggered")
 
 
+def _cleanup_ollama() -> None:
+    """アプリ終了時にモデルをアンロードし、自分で起動した Ollama を停止する。"""
+    global _cleanup_done
+    if _cleanup_done:
+        return
+    _cleanup_done = True
+    try:
+        model = _current_model()
+        if model and _ollama_up():
+            req = urllib.request.Request(
+                "http://localhost:11434/api/generate",
+                data=json.dumps({"model": model, "keep_alive": 0}).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=3)
+            print(f"[naruhodo] unloaded model {model}")
+    except Exception:  # noqa: BLE001
+        pass
+
+    if _we_started_ollama:
+        try:
+            if _ollama_proc is not None and _ollama_proc.poll() is None:
+                _ollama_proc.terminate()
+                _ollama_proc.wait(timeout=5)
+                print("[naruhodo] stopped ollama serve")
+            else:
+                subprocess.run(["osascript", "-e",
+                                'tell application "Ollama" to quit'],
+                               timeout=5, capture_output=True)
+                print("[naruhodo] quit Ollama.app")
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _handle_term(signum, _frame):
+    _cleanup_ollama()
+    raise SystemExit(0)
+
+
 def main() -> None:
     print(f"[naruhodo] starting on port {PORT}")
     _init_sparkle()
+    atexit.register(_cleanup_ollama)
+    signal.signal(signal.SIGTERM, _handle_term)
 
     import webview
 
@@ -308,6 +360,10 @@ def main() -> None:
         min_size=(900, 600),
     )
 
+    def _on_closing():
+        _cleanup_ollama()
+
+    window.events.closing += _on_closing
     webview.start(func=_boot, args=(window,))
 
 

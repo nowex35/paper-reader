@@ -904,4 +904,4 @@ app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("server:app", host="127.0.0.1", port=8432, reload=True)
+    uvicorn.run("server:app", host="127.0.0.1", port=8432)
