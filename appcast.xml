@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Naruhodo</title>
+    <item>
+      <title>Version 1.3.0</title>
+      <sparkle:version>73</sparkle:version>
+      <sparkle:shortVersionString>1.3.0</sparkle:shortVersionString>
+      <pubDate>Mon, 29 Jun 2026 17:47:53 +0000</pubDate>
+      <description><![CDATA[<ul><li>v1.3.0: i18n, explain modes, dark mode, issue fixes</li></ul>]]></description>
+      <enclosure url="https://github.com/nowex35/paper-reader/releases/download/v1.3.0/Naruhodo.zip"
+       sparkle:edSignature="lPo5YXxYYTy+e65NLFakzp7A/wPai8EEl5ch2/IndGm/EW4ERs2fBrMRJDJew4MQJKNwcvQXUOCVQoVIeF1SBg=="
+       length="4326037"
+       type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>
