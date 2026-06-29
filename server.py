@@ -135,6 +135,14 @@ def _load_native_language() -> str:
 NATIVE_LANGUAGE = _load_native_language()
 
 
+def _load_skip_translation() -> bool:
+    return _load_local_settings().get("skip_translation", False)
+
+
+SKIP_TRANSLATION = _load_skip_translation()
+
+
+
 def _unload_model(name: str) -> None:
     """Ollama のメモリから指定モデルを即時アンロードする。Ollama は使用後も
     既定で5分間モデルを載せたままにするため、切替時に旧モデルを残すと 8B 等で
@@ -151,6 +159,34 @@ def _unload_model(name: str) -> None:
 # 実行中に書き換わる「いま使うモデル」。OLLAMA_MODEL は初期値・既定値の役目。
 CURRENT_MODEL = _load_model()
 STATIC_DIR = BASE_DIR / "static"
+
+
+def _load_ui_language() -> str:
+    return _load_local_settings().get("ui_language", "ja")
+
+
+def _load_ui_translations(lang: str) -> dict[str, str]:
+    path = STATIC_DIR / "locales" / f"{lang}.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        path_ja = STATIC_DIR / "locales" / "ja.json"
+        try:
+            return json.loads(path_ja.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            return {}
+
+
+UI_LANGUAGE = _load_ui_language()
+_ui_translations = _load_ui_translations(UI_LANGUAGE)
+
+
+def _t(key: str, **kwargs) -> str:
+    s = _ui_translations.get(key, key)
+    for k, v in kwargs.items():
+        s = s.replace(f"{{{k}}}", str(v))
+    return s
+
 
 _paper_cache: dict[str, str] = {}  # paper_id → 論文全文。質問2回目以降の再送を省略
 
@@ -232,16 +268,116 @@ Keep accuracy intact. End with one sentence on where this passage fits in the pa
 最後に、論文の流れの中でこの箇所がどこに位置するか（導入・手法・実験・考察など）を一言添える。
 """
 
-SETUP_GUIDE = f"""> ⚠️ **Ollama が見つかりません**
->
-> 解説機能には Ollama（ローカルLLM）が必要です。
->
-> 1. [Ollama をインストール](https://ollama.com/download)
-> 2. Ollama アプリを起動
-> 3. `ollama pull {OLLAMA_MODEL}`
->
-> 準備ができたら、もう一度テキストを選択してください。
-"""
+def _build_summarize_instruction(lang: str) -> str:
+    if lang == "en":
+        return """You are an assistant helping a researcher read academic papers.
+The user has selected a passage. Summarize it as 3–5 concise bullet points in Markdown.
+Each bullet should capture one key point. No preamble — start directly with bullets.
+Focus on: what is stated, why it matters, and any key numbers or results."""
+    lang_name = NATIVE_LANGUAGES.get(lang, lang)
+    return f"""あなたは学術論文を読む研究者を助けるアシスタントです。
+ユーザーが選択した箇所を、{lang_name}で3〜5個の箇条書きに要約してください。
+各項目は1つの要点を簡潔に捉えること。前置きなしで箇条書きから始めること。
+重要な数値・結果・主張を漏らさないこと。"""
+
+
+def _build_math_instruction(lang: str) -> str:
+    if lang == "en":
+        return """You are an assistant helping a researcher understand mathematical content in academic papers.
+The user has selected a passage containing equations, formulas, or mathematical notation.
+Provide a clear explanation in Markdown with exactly these 3 headings — no preamble.
+
+## Symbols & Notation
+Define every symbol, variable, operator, and subscript/superscript in the selection as a bullet list.
+
+## Step-by-Step Breakdown
+Walk through the mathematical logic: what each term does, how they combine, and the derivation if applicable. Use inline math ($...$) notation.
+
+## Intuitive Meaning
+Explain what this math "means" in plain language. Use a concrete analogy or example. Something like "As X grows, Y shrinks exponentially" or "This measures how far the prediction is from the truth." Keep it accurate."""
+    lang_name = NATIVE_LANGUAGES.get(lang, lang)
+    return f"""あなたは学術論文の数式を解説するアシスタントです。
+ユーザーが選択した箇所には数式・数学的記法が含まれています。
+以下の3つの見出し構成で{lang_name}の解説を出力してください。前置き不要。
+
+## 記号・表記の定義
+選択箇所に登場するすべての変数・演算子・添字を箇条書きで定義する。
+
+## ステップごとの分解
+数式の論理を順を追って説明する。各項が何をしているか、どう組み合わさるか、導出があれば示す。インライン数式（$...$）を使うこと。
+
+## 直感的な意味
+この数式が「何を意味しているか」を平易な{lang_name}で説明する。
+「Xが大きくなるとYは指数的に小さくなる」「予測と真の値の距離を測る指標」のように、
+読者が具体的なイメージを持てるように書く。正確さは犠牲にしないこと。"""
+
+
+def _build_critical_instruction(lang: str) -> str:
+    if lang == "en":
+        return """You are a critical reading assistant helping a researcher evaluate academic papers.
+The user has selected a passage. Analyze it critically in Markdown with exactly these 3 headings — no preamble.
+
+## Assumptions
+List the explicit and implicit assumptions this passage relies on. What must be true for the claims to hold?
+
+## Limitations & Weaknesses
+Identify methodological limitations, potential confounds, missing controls, generalizability concerns, or logical gaps.
+
+## Questions to Consider
+Suggest 2–3 specific follow-up questions a critical reader should ask. Frame them as "Does this account for…?", "What happens if…?", "How robust is this to…?" """
+    lang_name = NATIVE_LANGUAGES.get(lang, lang)
+    return f"""あなたは学術論文の批判的読解を支援するアシスタントです。
+ユーザーが選択した箇所を批判的に分析し、以下の3つの見出し構成で{lang_name}の解説を出力してください。前置き不要。
+
+## 前提条件
+この箇所が依拠している明示的・暗黙的な前提を列挙する。主張が成り立つために何が真でなければならないか。
+
+## 限界・弱点
+方法論上の限界、交絡要因、統制の欠如、一般化可能性の懸念、論理的なギャップを指摘する。
+
+## 検討すべき問い
+批判的な読者が問うべき具体的なフォローアップ質問を2〜3個提案する。
+「〇〇を考慮しているか？」「△△の場合はどうなるか？」「この結果は◻◻に対してどの程度頑健か？」のように。"""
+
+
+def _build_relate_instruction(lang: str) -> str:
+    if lang == "en":
+        return """You are an assistant helping a researcher contextualize concepts in academic papers.
+The user has selected a passage. Explain how it relates to the broader field in Markdown with exactly these 3 headings — no preamble.
+
+## Related Concepts
+List related methods, theories, or techniques and briefly explain how each connects to the selected passage.
+
+## Historical Context
+Where does this fit in the evolution of the field? What came before, and what does this build upon?
+
+## Practical Implications
+What are the real-world applications or downstream effects? Who would use this and why?"""
+    lang_name = NATIVE_LANGUAGES.get(lang, lang)
+    return f"""あなたは学術論文の文脈理解を支援するアシスタントです。
+ユーザーが選択した箇所を、より広い研究分野の中で位置づけ、以下の3つの見出し構成で{lang_name}の解説を出力してください。前置き不要。
+
+## 関連する概念
+関連する手法・理論・技術を挙げ、選択箇所とのつながりを簡潔に説明する。
+
+## 歴史的な位置づけ
+この分野の発展の中でどこに位置するか。何の上に構築されているか。
+
+## 実用的な意味
+現実世界での応用や下流への影響は何か。誰がどのような場面で使うか。"""
+
+
+MODE_INSTRUCTIONS = {
+    "explain": _build_explain_instruction,
+    "summarize": _build_summarize_instruction,
+    "math": _build_math_instruction,
+    "critical": _build_critical_instruction,
+    "relate": _build_relate_instruction,
+}
+
+
+def _setup_guide() -> str:
+    return _t("server.setup_guide", model=CURRENT_MODEL)
 
 
 def ollama_status() -> dict:
@@ -261,12 +397,17 @@ def ollama_status() -> dict:
             "model": CURRENT_MODEL, "models": models}
 
 
-def stream_ollama(text: str, context: str | None):
-    source_is_native = NATIVE_LANGUAGE != "en" and _is_japanese_text(text)
+def stream_ollama(text: str, context: str | None, mode: str = "explain"):
+    builder = MODE_INSTRUCTIONS.get(mode, _build_explain_instruction)
+    if mode == "explain":
+        source_is_native = SKIP_TRANSLATION or (NATIVE_LANGUAGE != "en" and _is_japanese_text(text))
+        instruction = builder(NATIVE_LANGUAGE, source_is_native)
+    else:
+        instruction = builder(NATIVE_LANGUAGE)
     payload = {
         "model": CURRENT_MODEL,
         "messages": [
-            {"role": "system", "content": _build_explain_instruction(NATIVE_LANGUAGE, source_is_native)},
+            {"role": "system", "content": instruction},
             {"role": "user", "content": build_prompt(text, context)},
         ],
         "stream": True,
@@ -398,7 +539,7 @@ def stream_gemini(question: str, paper: str, selection: str | None,
 def stream_openai(question: str, paper: str, selection: str | None,
                   history: list[dict] | None):
     if not openai_mod:
-        yield "> ⚠️ openai パッケージが未インストールです。`pip install openai` を実行してください。"
+        yield _t("server.pip_openai")
         return
     base = ASK_BASE_URL or "https://api.openai.com"
     client = openai_mod.OpenAI(
@@ -421,7 +562,7 @@ def stream_openai(question: str, paper: str, selection: str | None,
 def stream_anthropic(question: str, paper: str, selection: str | None,
                      history: list[dict] | None):
     if not anthropic_mod:
-        yield "> ⚠️ anthropic パッケージが未インストールです。`pip install anthropic` を実行してください。"
+        yield _t("server.pip_anthropic")
         return
     base = ASK_BASE_URL or "https://api.anthropic.com"
     client = anthropic_mod.Anthropic(
@@ -445,10 +586,10 @@ def stream_custom(question: str, paper: str, selection: str | None,
                   history: list[dict] | None):
     """OpenAI互換エンドポイント向け。APIキーはダミーでも可。"""
     if not openai_mod:
-        yield "> ⚠️ openai パッケージが未インストールです。`pip install openai` を実行してください。"
+        yield _t("server.pip_openai")
         return
     if not ASK_BASE_URL:
-        yield "> ⚠️ ベースURLが未設定です。設定画面でエンドポイントURLを入力してください。"
+        yield _t("server.base_url_missing")
         return
     client = openai_mod.OpenAI(
         api_key=ASK_API_KEY or "not-needed",
@@ -573,6 +714,7 @@ async def security_middleware(request, call_next):
 class ExplainRequest(BaseModel):
     text: str
     context: str | None = None
+    mode: str = "explain"
 
 
 _SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
@@ -721,7 +863,7 @@ def pull_model():
     model = CURRENT_MODEL
 
     def gen():
-        yield f"モデル {model} をダウンロード中…\n"
+        yield _t("server.pull_downloading", model=model)
         try:
             proc = _sp.Popen([ollama, "pull", model],
                              stdout=_sp.PIPE, stderr=_sp.STDOUT, text=True)
@@ -729,11 +871,11 @@ def pull_model():
                 yield line
             proc.wait()
             if proc.returncode == 0:
-                yield "\n✅ ダウンロード完了！ページを再読み込みしてください。\n"
+                yield _t("server.pull_done")
             else:
-                yield f"\n⚠️ ダウンロード失敗（終了コード {proc.returncode}）\n"
+                yield _t("server.pull_failed", code=proc.returncode)
         except Exception as e:  # noqa: BLE001
-            yield f"\n⚠️ エラー: {e}\n"
+            yield _t("server.pull_error", error=str(e))
 
     return StreamingResponse(gen(), media_type="text/plain; charset=utf-8")
 
@@ -742,26 +884,22 @@ def pull_model():
 def explain(req: ExplainRequest):
     text = (req.text or "").strip()
     if not text:
-        return JSONResponse({"error": "選択テキストが空です"}, status_code=400)
+        return JSONResponse({"error": _t("server.empty_selection")}, status_code=400)
 
     def gen():
         st = ollama_status()
         if not st["running"]:
-            yield SETUP_GUIDE
+            yield _setup_guide()
             return
         if not st["model_present"]:
-            yield (
-                f"> ⚠️ モデル **{CURRENT_MODEL}** が未取得です。\n>\n"
-                f"> ターミナルで `ollama pull {CURRENT_MODEL}` を実行してから、"
-                "もう一度選択してください。\n"
-            )
+            yield _t("server.model_not_found", model=CURRENT_MODEL)
             return
         try:
-            yield from stream_ollama(text, req.context)
+            yield from stream_ollama(text, req.context, req.mode)
         except httpx.HTTPStatusError as e:  # noqa: BLE001
-            yield f"\n\n> ⚠️ Ollama エラー (HTTP {e.response.status_code})。モデル名や `ollama serve` を確認してください。"
+            yield _t("server.ollama_error", status=e.response.status_code)
         except Exception as e:  # noqa: BLE001
-            yield f"\n\n> ⚠️ エラー: {type(e).__name__}: {e}"
+            yield _t("server.generic_error", error=f"{type(e).__name__}: {e}")
 
     return StreamingResponse(gen(), media_type="text/plain; charset=utf-8")
 
@@ -802,6 +940,8 @@ class SettingsIn(BaseModel):
     model: str | None = None
     base_url: str | None = None
     native_language: str | None = None
+    ui_language: str | None = None
+    skip_translation: bool | None = None
 
 
 ENV_FILE = BASE_DIR / ".env"
@@ -837,12 +977,14 @@ def get_settings():
         "providers": list(PROVIDER_DEFAULTS.keys()),
         "native_language": NATIVE_LANGUAGE,
         "native_languages": NATIVE_LANGUAGES,
+        "ui_language": UI_LANGUAGE,
+        "skip_translation": SKIP_TRANSLATION,
     }
 
 
 @app.put("/api/settings")
 def put_settings(req: SettingsIn):
-    global ASK_PROVIDER, ASK_API_KEY, ASK_MODEL, ASK_BASE_URL, NATIVE_LANGUAGE
+    global ASK_PROVIDER, ASK_API_KEY, ASK_MODEL, ASK_BASE_URL, NATIVE_LANGUAGE, UI_LANGUAGE, _ui_translations, SKIP_TRANSLATION
     if req.provider is not None:
         ASK_PROVIDER = req.provider.strip()
         _write_env_key("ASK_PROVIDER", ASK_PROVIDER)
@@ -864,14 +1006,27 @@ def put_settings(req: SettingsIn):
             s = _load_local_settings()
             s["native_language"] = nl
             _save_local_settings(s)
-    return {**ask_status_info(), "native_language": NATIVE_LANGUAGE, "saved": True}
+    if req.ui_language is not None:
+        ul = req.ui_language.strip()
+        if ul in NATIVE_LANGUAGES:
+            UI_LANGUAGE = ul
+            _ui_translations = _load_ui_translations(ul)
+            s = _load_local_settings()
+            s["ui_language"] = ul
+            _save_local_settings(s)
+    if req.skip_translation is not None:
+        SKIP_TRANSLATION = req.skip_translation
+        s = _load_local_settings()
+        s["skip_translation"] = SKIP_TRANSLATION
+        _save_local_settings(s)
+    return {**ask_status_info(), "native_language": NATIVE_LANGUAGE, "ui_language": UI_LANGUAGE, "skip_translation": SKIP_TRANSLATION, "saved": True}
 
 
 @app.post("/api/ask")
 def ask(req: AskRequest):
     question = (req.question or "").strip()
     if not question:
-        return JSONResponse({"error": "質問が空です"}, status_code=400)
+        return JSONResponse({"error": _t("server.empty_question")}, status_code=400)
 
     paper = (req.paper or "").strip()
     pid = (req.paper_id or "").strip()
@@ -885,16 +1040,16 @@ def ask(req: AskRequest):
     def gen():
         status = ask_status_info()
         if not status["available"]:
-            yield "> ⚠️ 質問機能が未設定です。⚙ 設定からAPIキーを登録してください。"
+            yield _t("server.ask_not_configured")
             return
         fn = STREAM_FN.get(ASK_PROVIDER)
         if not fn:
-            yield f"> ⚠️ 未対応のプロバイダ: {ASK_PROVIDER}"
+            yield _t("server.unknown_provider", provider=ASK_PROVIDER)
             return
         try:
             yield from fn(question, paper, req.selection, req.history)
         except Exception as e:  # noqa: BLE001
-            yield f"\n\n> ⚠️ エラー: {type(e).__name__}: {e}"
+            yield _t("server.generic_error", error=f"{type(e).__name__}: {e}")
 
     return StreamingResponse(gen(), media_type="text/plain; charset=utf-8")
 

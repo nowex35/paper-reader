@@ -4,8 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Naruhodo</title>
-<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
-<link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -21,92 +21,99 @@
 </head>
 <body data-layout="standard">
   <header id="topbar" role="banner">
-    <button id="listToggle" aria-label="論文一覧の開閉" aria-expanded="false" title="論文一覧の開閉 ⌘M">☷</button>
-    <button id="openBtn">📂 PDFを開く</button>
-    <span id="fileName" class="muted" aria-live="polite">ファイル未選択</span>
+    <button id="listToggle" data-i18n-aria="topbar.list_toggle_aria" data-i18n-title="topbar.list_toggle_title" aria-label="論文一覧の開閉" aria-expanded="false" title="論文一覧の開閉 ⌘M">☷</button>
+    <button id="openBtn" data-i18n="topbar.open_pdf">PDFを開く</button>
+    <span id="fileName" class="muted" aria-live="polite" data-i18n="topbar.file_none">ファイル未選択</span>
     <span id="pageNav" hidden>
-      <input id="pageInput" type="number" min="1" aria-label="ページ番号" title="ページ番号を入力して Enter" />
+      <input id="pageInput" type="number" min="1" data-i18n-aria="topbar.page_aria" data-i18n-title="topbar.page_title" aria-label="ページ番号" title="ページ番号を入力して Enter" />
       <span class="muted">/ <span id="pageTotal">0</span></span>
     </span>
-    <span id="bookmarkGroup" role="group" aria-label="しおり">
-      <button id="bookmarkBtn" aria-label="しおり追加/削除" title="しおり追加/削除 ⌘D">🔖 0</button>
-      <button id="bookmarkPrev" class="bm-nav" aria-label="前のしおりへ" title="前のしおりへ ⌘⇧K">‹</button>
-      <button id="bookmarkNext" class="bm-nav" aria-label="次のしおりへ" title="次のしおりへ ⌘⇧J">›</button>
-      <span id="bookmarkHelp" tabindex="0" role="button" aria-label="しおりのショートカット一覧">?
+    <span id="bookmarkGroup" role="group" data-i18n-aria="bookmark.group_aria" aria-label="しおり">
+      <button id="bookmarkBtn" data-i18n-aria="bookmark.toggle_aria" data-i18n-title="bookmark.toggle_title" aria-label="しおり追加/削除" title="しおり追加/削除 ⌘D">0</button>
+      <button id="bookmarkPrev" class="bm-nav" data-i18n-aria="bookmark.prev_aria" data-i18n-title="bookmark.prev_title" aria-label="前のしおりへ" title="前のしおりへ ⌘⇧K">‹</button>
+      <button id="bookmarkNext" class="bm-nav" data-i18n-aria="bookmark.next_aria" data-i18n-title="bookmark.next_title" aria-label="次のしおりへ" title="次のしおりへ ⌘⇧J">›</button>
+      <span id="bookmarkHelp" tabindex="0" role="button" data-i18n-aria="bookmark.help_aria" aria-label="しおりのショートカット一覧">?
         <span class="bm-help-popover" role="tooltip">
-          <b>🔖 しおり</b>
-          <kbd>⌘D</kbd><span>追加 / 削除</span>
-          <kbd>⌘⇧J/K</kbd><span>次 / 前へ移動</span>
-          <kbd>マーカークリック</kbd><span>削除</span>
+          <b data-i18n="bookmark.popover_title">しおり</b>
+          <kbd>⌘D</kbd><span data-i18n="bookmark.popover_toggle">追加 / 削除</span>
+          <kbd>⌘⇧J/K</kbd><span data-i18n="bookmark.popover_nav">次 / 前へ移動</span>
+          <kbd data-i18n="bookmark.popover_marker_key">マーカークリック</kbd><span data-i18n="bookmark.popover_marker_action">削除</span>
         </span>
       </span>
     </span>
-    <button id="memoToggle" aria-label="メモパネルの開閉" aria-expanded="false" title="メモパネルの開閉 ⌘B">📝 メモ</button>
+    <button id="memoToggle" data-i18n="topbar.memo" data-i18n-aria="topbar.memo_aria" data-i18n-title="topbar.memo_title" aria-label="メモパネルの開閉" aria-expanded="false" title="メモパネルの開閉 ⌘B">メモ</button>
+    <button id="modeBtn" data-i18n-title="topbar.mode_title" title="解説モード切替（クリック or 1-5）">解説</button>
     <span class="spacer"></span>
-    <select id="modelSelect" aria-label="解説に使うローカルLLMモデル" title="解説に使うローカルLLMモデル" hidden></select>
+    <select id="modelSelect" data-i18n-aria="topbar.model_aria" data-i18n-title="topbar.model_aria" aria-label="解説に使うローカルLLMモデル" title="解説に使うローカルLLMモデル" hidden></select>
     <span id="status" class="muted" role="status" aria-live="polite"></span>
-    <button id="layoutBtn" aria-label="レイアウト切替" title="レイアウト切替 ⌘.">⧉</button>
-    <button id="settingsBtn" aria-label="設定を開く" title="設定">⚙ 設定</button>
-    <span id="shortcutsHelp" aria-label="ショートカット一覧" role="button" tabindex="0">?
-      <div class="sc-popover" role="tooltip" aria-label="キーボードショートカット一覧">
-        <b>⌨ ショートカット</b>
+    <button id="layoutBtn" data-i18n-aria="topbar.layout_aria" data-i18n-title="topbar.layout_title" aria-label="レイアウト切替" title="レイアウト切替 ⌘.">⧉</button>
+    <button id="settingsBtn" data-i18n-aria="topbar.settings_aria" data-i18n-title="topbar.settings_title" aria-label="設定を開く" title="設定"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    <span id="shortcutsHelp" data-i18n-aria="shortcuts.aria" aria-label="ショートカット一覧" role="button" tabindex="0">?
+      <div class="sc-popover" role="tooltip" data-i18n-aria="shortcuts.kbd_aria" aria-label="キーボードショートカット一覧">
+        <b data-i18n="shortcuts.title">ショートカット</b>
         <div class="sc-grid">
-          <kbd>⌘E</kbd><span>選択テキストを解説</span>
-          <kbd>⌘⏎</kbd><span>質問を送信</span>
-          <kbd>⌘/</kbd><span>質問欄にフォーカス</span>
-          <kbd>⌘D</kbd><span>しおり追加/削除</span>
-          <kbd>⌘⇧J / Shift→</kbd><span>次のしおりへ</span>
-          <kbd>⌘⇧K / Shift←</kbd><span>前のしおりへ</span>
-          <kbd>j/k</kbd><span>スクロール 下/上</span>
-          <kbd>h/l</kbd><span>スクロール 左/右</span>
-          <kbd>d/u</kbd><span>半ページ 下/上</span>
-          <kbd>←/→</kbd><span>前/次のページへ</span>
-          <kbd>⌘M</kbd><span>論文一覧の開閉</span>
-          <kbd>⌘B</kbd><span>メモパネルの開閉</span>
-          <kbd>⌘J</kbd><span>メモにフォーカス</span>
-          <kbd>⌘L</kbd><span>AIパネルの開閉</span>
-          <kbd>⌘S</kbd><span>メモを保存</span>
-          <kbd>⌘F</kbd><span>ページ内検索</span>
-          <kbd>⌘]/[/0</kbd><span>ズーム</span>
-          <kbd>⌘.</kbd><span>レイアウト切替</span>
+          <kbd>⌘E</kbd><span data-i18n="shortcuts.explain">選択テキストを解説</span>
+          <kbd>⌘⇧E</kbd><span data-i18n="shortcuts.quote_to_memo">選択テキストをメモに引用</span>
+          <kbd>⌘⏎</kbd><span data-i18n="shortcuts.ask_send">質問を送信</span>
+          <kbd>⌘/</kbd><span data-i18n="shortcuts.ask_focus">質問欄にフォーカス</span>
+          <kbd>⌘D</kbd><span data-i18n="shortcuts.bookmark_toggle">しおり追加/削除</span>
+          <kbd>⌘⇧J / Shift→</kbd><span data-i18n="shortcuts.bookmark_next">次のしおりへ</span>
+          <kbd>⌘⇧K / Shift←</kbd><span data-i18n="shortcuts.bookmark_prev">前のしおりへ</span>
+          <kbd>j/k</kbd><span data-i18n="shortcuts.scroll_vt">スクロール 下/上</span>
+          <kbd>h/l</kbd><span data-i18n="shortcuts.scroll_hz">スクロール 左/右</span>
+          <kbd>d/u</kbd><span data-i18n="shortcuts.scroll_half">半ページ 下/上</span>
+          <kbd>←/→</kbd><span data-i18n="shortcuts.page_nav">前/次のページへ</span>
+          <kbd>⌘M</kbd><span data-i18n="shortcuts.list_toggle">論文一覧の開閉</span>
+          <kbd>⌘B</kbd><span data-i18n="shortcuts.memo_toggle">メモパネルの開閉</span>
+          <kbd>⌘J</kbd><span data-i18n="shortcuts.memo_focus">メモにフォーカス</span>
+          <kbd>⌘L</kbd><span data-i18n="shortcuts.ai_toggle">AIパネルの開閉</span>
+          <kbd>⌘S</kbd><span data-i18n="shortcuts.memo_save">メモを保存</span>
+          <kbd>⌘F</kbd><span data-i18n="shortcuts.find">ページ内検索</span>
+          <kbd>⌘]/[/0</kbd><span data-i18n="shortcuts.zoom">ズーム</span>
+          <kbd>⌘.</kbd><span data-i18n="shortcuts.layout">レイアウト切替</span>
         </div>
       </div>
     </span>
   </header>
 
-  <dialog id="settingsDialog" aria-label="設定">
+  <dialog id="settingsDialog" data-i18n-aria="settings.dialog_aria" aria-label="設定">
     <div class="settings-head">
-      <strong>⚙️ 設定</strong>
-      <button id="settingsClose" aria-label="閉じる" title="閉じる">×</button>
+      <strong data-i18n="settings.title">設定</strong>
+      <span class="spacer"></span>
+      <button id="settingsClose" data-i18n-aria="settings.close_aria" data-i18n-title="settings.close_title" aria-label="閉じる" title="閉じる">×</button>
     </div>
     <div class="settings-body">
       <section class="settings-section">
-        <h3>文字サイズ</h3>
+        <h3 data-i18n="settings.font_size">文字サイズ</h3>
         <label class="size-slider">
-          メモ <span id="memoSizeVal">14</span>px
-          <input id="memoSizeRange" type="range" min="10" max="22" step="1" value="14" aria-label="メモの文字サイズ" />
+          <span data-i18n="settings.memo_label">メモ</span> <span id="memoSizeVal">14</span>px
+          <input id="memoSizeRange" type="range" min="10" max="22" step="1" value="14" data-i18n-aria="settings.memo_size_aria" aria-label="メモの文字サイズ" />
         </label>
         <label class="size-slider">
-          AI 応答 <span id="aiSizeVal">14</span>px
-          <input id="aiSizeRange" type="range" min="10" max="22" step="1" value="14" aria-label="AI応答の文字サイズ" />
+          <span data-i18n="settings.ai_label">AI 応答</span> <span id="aiSizeVal">14</span>px
+          <input id="aiSizeRange" type="range" min="10" max="22" step="1" value="14" data-i18n-aria="settings.ai_size_aria" aria-label="AI応答の文字サイズ" />
         </label>
         <label class="size-slider">
-          質問欄 <span id="askSizeVal">13.5</span>px
-          <input id="askSizeRange" type="range" min="10" max="22" step="0.5" value="13.5" aria-label="質問欄の文字サイズ" />
+          <span data-i18n="settings.ask_label">質問欄</span> <span id="askSizeVal">13.5</span>px
+          <input id="askSizeRange" type="range" min="10" max="22" step="0.5" value="13.5" data-i18n-aria="settings.ask_size_aria" aria-label="質問欄の文字サイズ" />
         </label>
       </section>
       <section class="settings-section">
-        <h3>パネル表示</h3>
+        <h3 data-i18n="settings.panel_display">パネル表示</h3>
         <label class="settings-toggle">
           <input id="settingsAiPanel" type="checkbox" checked />
-          AIパネルを表示 <span class="muted">⌘L</span>
+          <span data-i18n="settings.show_ai_panel">AIパネルを表示</span> <span class="muted">⌘L</span>
+        </label>
+        <label class="settings-toggle">
+          <span class="toggle-wrap"><input id="settingsDarkMode" type="checkbox" /><span class="toggle-track"></span></span>
+          <span data-i18n="settings.dark_mode">ダークモード</span>
         </label>
       </section>
       <section class="settings-section">
-        <h3>母国語</h3>
-        <p class="settings-desc">母国語を選択すると、その言語で解説が生成されます。論文と同じ言語の場合、翻訳セクションは省略されます。</p>
+        <h3 data-i18n="settings.ui_language">UI言語</h3>
+        <p class="settings-desc" data-i18n="settings.ui_language_desc">アプリの表示言語を切り替えます。解説の言語は「母国語」設定で別途変更できます。</p>
         <label>
-          <select id="settingsNativeLang">
+          <select id="settingsUiLang">
             <option value="ja">日本語</option>
             <option value="en">English</option>
             <option value="zh">中文</option>
@@ -115,35 +122,52 @@
         </label>
       </section>
       <section class="settings-section">
-        <h3>質問機能</h3>
-        <p class="settings-desc">クラウドLLMのAPIキーを設定すると、論文全文を踏まえた質問ができるようになります。翻訳・解説は設定なしで使えます。</p>
+        <h3 data-i18n="settings.native_language">母国語</h3>
+        <p class="settings-desc" data-i18n="settings.native_language_desc">母国語を選択すると、その言語で解説が生成されます。論文と同じ言語の場合、翻訳セクションは省略されます。</p>
         <label>
-          プロバイダ
+          <select id="settingsNativeLang">
+            <option value="ja">日本語</option>
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+            <option value="ko">한국어</option>
+          </select>
+        </label>
+        <label class="settings-toggle">
+          <input id="settingsSkipTranslation" type="checkbox" />
+          <span data-i18n="settings.skip_translation">翻訳セクションを省略</span>
+        </label>
+        <p class="settings-desc" data-i18n="settings.skip_translation_desc">原文が読める場合、解説から翻訳セクションを省き、用語解説と要約のみ表示します。</p>
+      </section>
+      <section class="settings-section">
+        <h3 data-i18n="settings.ask_feature">質問機能</h3>
+        <p class="settings-desc" data-i18n="settings.ask_feature_desc">クラウドLLMのAPIキーを設定すると、論文全文を踏まえた質問ができるようになります。翻訳・解説は設定なしで使えます。</p>
+        <label>
+          <span data-i18n="settings.provider">プロバイダ</span>
           <select id="settingsProvider">
             <option value="gemini">Google Gemini</option>
             <option value="openai">OpenAI</option>
             <option value="anthropic">Anthropic (Claude)</option>
-            <option value="custom">カスタム (OpenAI互換)</option>
+            <option value="custom" data-i18n="settings.custom_provider">カスタム (OpenAI互換)</option>
           </select>
         </label>
         <label>
-          API キー
-          <input id="settingsApiKey" type="password" placeholder="未設定" autocomplete="off" />
+          <span data-i18n="settings.api_key">API キー</span>
+          <input id="settingsApiKey" type="password" data-i18n-placeholder="settings.key_placeholder_unset" placeholder="未設定" autocomplete="off" />
         </label>
         <label>
-          モデル
+          <span data-i18n="settings.model_label">モデル</span>
           <select id="settingsModelSelect">
-            <option value="">読み込み中…</option>
+            <option value="" data-i18n="common.loading">読み込み中…</option>
           </select>
-          <input id="settingsModel" type="text" placeholder="カスタムモデルID" hidden />
+          <input id="settingsModel" type="text" data-i18n-placeholder="settings.custom_model_id" placeholder="カスタムモデルID" hidden />
         </label>
         <label id="settingsBaseUrlLabel" hidden>
-          ベースURL
+          <span data-i18n="settings.base_url">ベースURL</span>
           <input id="settingsBaseUrl" type="text" placeholder="" />
           <span id="baseUrlHint" class="muted" hidden></span>
         </label>
         <details class="settings-help">
-          <summary>APIキーの取得方法</summary>
+          <summary data-i18n="settings.api_key_help_title">APIキーの取得方法</summary>
           <div id="helpGemini">
             <p><strong>Google Gemini</strong></p>
             <ol>
@@ -175,15 +199,15 @@
               <li>モデル名はサーバーが返す一覧から選択、またはカスタム入力</li>
             </ul>
           </div>
-          <p>キーはこの Mac 内にのみ保存され、選択したプロバイダの API への通信にのみ使用されます。</p>
+          <p data-i18n="settings.key_privacy">キーはこの Mac 内にのみ保存され、選択したプロバイダの API への通信にのみ使用されます。</p>
         </details>
       </section>
     </div>
     <div class="settings-foot">
-      <button id="settingsReset" class="settings-reset-btn">デフォルトに戻す</button>
+      <button id="settingsReset" class="settings-reset-btn" data-i18n="settings.reset">デフォルトに戻す</button>
       <span class="spacer"></span>
       <span id="settingsStatus" class="muted" role="status" aria-live="polite"></span>
-      <button id="settingsSave">保存</button>
+      <button id="settingsSave" data-i18n="settings.save">保存</button>
     </div>
   </dialog>
 
@@ -191,135 +215,135 @@
     <div class="switch-spinner"></div>
   </div>
   <div id="main" role="main">
-    <aside id="listPane" aria-label="論文一覧">
+    <aside id="listPane" data-i18n-aria="list.aria" aria-label="論文一覧">
       <div id="listHead">
-        <strong>📚 読んだ論文</strong>
+        <strong data-i18n="list.title">読んだ論文</strong>
         <span id="listCount" class="muted"></span>
         <span class="spacer"></span>
-        <button id="listCollapse" aria-label="一覧を隠す" title="一覧を隠す">«</button>
+        <button id="listCollapse" data-i18n-aria="list.collapse_aria" data-i18n-title="list.collapse_title" aria-label="一覧を隠す" title="一覧を隠す">«</button>
       </div>
-      <input id="listSearch" type="search" placeholder="タイトル・PDF名で絞り込み" aria-label="論文を検索" />
+      <input id="listSearch" type="search" data-i18n-placeholder="list.search_placeholder" data-i18n-aria="list.search_aria" placeholder="タイトル・PDF名で絞り込み" aria-label="論文を検索" />
       <ul id="listItems" role="list"></ul>
     </aside>
 
-    <section id="memoPanel" aria-label="メモ">
-      <div id="memoDrag" role="separator" aria-orientation="horizontal" aria-label="メモパネルの高さ調整" title="ドラッグで高さ調整"></div>
+    <section id="memoPanel" data-i18n-aria="memo.panel_aria" aria-label="メモ">
+      <div id="memoDrag" role="separator" aria-orientation="horizontal" data-i18n-aria="memo.drag_aria" data-i18n-title="memo.drag_title" aria-label="メモパネルの高さ調整" title="ドラッグで高さ調整"></div>
       <div id="memoHead">
-        <strong class="memoLabel">📝 メモ</strong>
+        <strong class="memoLabel" data-i18n="memo.title_label">メモ</strong>
         <span class="spacer"></span>
-        <button id="memoPreviewBtn" title="編集 / プレビュー切替">プレビュー</button>
-        <button id="memoExportBtn" title="メモをPDFでダウンロード">📄 PDF</button>
-        <button id="memoDeleteBtn" class="danger" title="このメモを削除">削除</button>
-        <button id="memoClose" aria-label="メモパネルを閉じる" title="閉じる">×</button>
+        <button id="memoPreviewBtn" data-i18n="memo.preview" data-i18n-title="memo.preview_title" title="編集 / プレビュー切替">プレビュー</button>
+        <button id="memoExportBtn" data-i18n="memo.export_btn" data-i18n-title="memo.export_title" title="メモをPDFでダウンロード">PDF</button>
+        <button id="memoDeleteBtn" class="danger" data-i18n="memo.delete" data-i18n-title="memo.delete_title" title="このメモを削除">削除</button>
+        <button id="memoClose" data-i18n-aria="memo.close_aria" data-i18n-title="memo.close_title" aria-label="メモパネルを閉じる" title="閉じる">×</button>
       </div>
       <div id="memoStatusBar"><span id="memoStatus" class="muted" role="status" aria-live="polite"></span></div>
       <div id="memoEdit">
-        <input id="memoTitle" type="text" placeholder="論文タイトル（一覧の見出しになります）" aria-label="論文タイトル" />
-        <textarea id="memoBody" placeholder="自分の言葉でまとめる（Markdown可）。&#10;例: 何の問題を / どう解いた / 何が新しい / 自分の研究との関係 …" aria-label="メモ本文"></textarea>
-        <div id="memoPreview" hidden aria-label="メモプレビュー"></div>
+        <input id="memoTitle" type="text" data-i18n-placeholder="memo.title_placeholder" placeholder="論文タイトル（一覧の見出しになります）" aria-label="論文タイトル" />
+        <textarea id="memoBody" data-i18n-placeholder="memo.body_placeholder" placeholder="自分の言葉でまとめる（Markdown可）。&#10;例: 何の問題を / どう解いた / 何が新しい / 自分の研究との関係 …" aria-label="メモ本文"></textarea>
+        <div id="memoPreview" hidden data-i18n-aria="memo.preview_aria" aria-label="メモプレビュー"></div>
       </div>
     </section>
     <div id="memoResizer" class="col-resizer" role="separator" aria-orientation="vertical" aria-label="メモパネルの幅調整" hidden></div>
 
-    <div id="pdfPane" tabindex="-1" aria-label="PDFビューワー">
+    <div id="pdfPane" tabindex="-1" data-i18n-aria="pdf.viewer_aria" aria-label="PDFビューワー">
       <div id="pdfViewport">
         <div id="pdfContainer">
           <div id="dropHint">
-            <img class="drop-icon" src="/static/icon-64.png" width="64" height="64" alt="" aria-hidden="true" />
-            <p>PDFをここにドラッグ&ドロップ、または「📂 PDFを開く」</p>
-            <p class="muted">テキストを選択 → ⌘E で日本語訳＋解説</p>
-            <p class="muted">🔖 ⌘D しおり追加　←/→ ページ送り　? ショートカット一覧</p>
+            <img class="drop-icon" src="/icon-64.png" width="64" height="64" alt="" aria-hidden="true" />
+            <p data-i18n="pdf.drop_hint">PDFをここにドラッグ&ドロップ、または「PDFを開く」</p>
+            <p class="muted" data-i18n="pdf.drop_hint_sub">テキストを選択 → ⌘E で翻訳＋解説</p>
+            <p class="muted" data-i18n="pdf.drop_hint_shortcuts">⌘D しおり追加　←/→ ページ送り　? ショートカット一覧</p>
           </div>
         </div>
       </div>
     </div>
-    <div id="resizer" role="separator" aria-orientation="vertical" aria-label="AIパネルの幅調整"></div>
-    <div id="sidePane" aria-label="AI解説・質問">
+    <div id="resizer" role="separator" aria-orientation="vertical" data-i18n-aria="pdf.resizer_aria" aria-label="AIパネルの幅調整"></div>
+    <div id="sidePane" data-i18n-aria="ai.panel_aria" aria-label="AI解説・質問">
       <div id="results" aria-live="polite">
-        <div class="empty">テキストを選択して ⌘E で日本語訳＋解説</div>
+        <div class="empty" data-i18n="explain.empty_hint">テキストを選択して ⌘E で翻訳＋解説</div>
       </div>
-      <form id="askForm" hidden aria-label="論文への質問">
-        <div id="askQuote" hidden aria-label="引用テキスト"></div>
+      <form id="askForm" hidden data-i18n-aria="ask.form_aria" aria-label="論文への質問">
+        <div id="askQuote" hidden data-i18n-aria="ask.quote_aria" aria-label="引用テキスト"></div>
         <div id="askRow">
-          <textarea id="askInput" rows="1" placeholder="この論文について質問（⌘+Enter で送信）" aria-label="質問を入力"></textarea>
-          <button type="submit" id="askSend" title="質問を送信">質問</button>
+          <textarea id="askInput" rows="1" data-i18n-placeholder="ask.input_placeholder" data-i18n-aria="ask.input_aria" placeholder="この論文について質問（⌘+Enter で送信）" aria-label="質問を入力"></textarea>
+          <button type="submit" id="askSend" data-i18n="ask.send" data-i18n-title="ask.send_title" title="質問を送信">質問</button>
         </div>
         <div id="askMeta" class="muted" role="status" aria-live="polite"></div>
       </form>
     </div>
   </div>
 
-  <button id="explainFab" hidden aria-label="選択テキストを解説">解説 ⌘E</button>
+  <button id="explainFab" hidden>解説 ⌘E</button>
 
   <div id="findBar" role="search" aria-label="ページ内検索" hidden>
-    <input id="findInput" type="search" placeholder="ページ内検索 ⌘F" aria-label="検索語句を入力" />
+    <input id="findInput" type="search" data-i18n-placeholder="find.input_placeholder" data-i18n-aria="find.input_aria" placeholder="ページ内検索 ⌘F" aria-label="検索語句を入力" />
     <span id="findCount" class="muted" aria-live="polite">0 / 0</span>
-    <button id="findPrev" aria-label="前の検索結果" title="前へ Shift+Enter">↑</button>
-    <button id="findNext" aria-label="次の検索結果" title="次へ Enter">↓</button>
-    <button id="findClose" aria-label="検索バーを閉じる" title="閉じる Esc">×</button>
+    <button id="findPrev" data-i18n-aria="find.prev_aria" data-i18n-title="find.prev_title" aria-label="前の検索結果" title="前へ Shift+Enter">↑</button>
+    <button id="findNext" data-i18n-aria="find.next_aria" data-i18n-title="find.next_title" aria-label="次の検索結果" title="次へ Enter">↓</button>
+    <button id="findClose" data-i18n-aria="find.close_aria" data-i18n-title="find.close_title" aria-label="検索バーを閉じる" title="閉じる Esc">×</button>
   </div>
 
   <input type="file" id="fileInput" accept="application/pdf" hidden aria-hidden="true" />
 
-  <dialog id="welcomeDialog" aria-label="ようこそ">
+  <dialog id="welcomeDialog" data-i18n-aria="welcome.dialog_aria" aria-label="ようこそ">
     <div class="welcome">
       <div class="welcome-header">
-        <h2>Naruhodo へようこそ</h2>
-        <p class="welcome-sub">AI が読み解く、次世代の論文リーダー</p>
+        <h2 data-i18n="welcome.title">Naruhodo へようこそ</h2>
+        <p class="welcome-sub" data-i18n="welcome.subtitle">AI が読み解く、次世代の論文リーダー</p>
       </div>
       <div class="welcome-steps">
         <div class="welcome-step">
           <span class="step-num" aria-hidden="true">1</span>
           <div>
-            <strong>PDFを開く</strong>
-            <p>ドラッグ&ドロップ、または「📂 PDFを開く」から。日本語・英語どちらも対応</p>
+            <strong data-i18n="welcome.step1_title">PDFを開く</strong>
+            <p data-i18n="welcome.step1_desc">ドラッグ&ドロップ、または「PDFを開く」から。日本語・英語どちらも対応</p>
           </div>
         </div>
         <div class="welcome-step">
           <span class="step-num" aria-hidden="true">2</span>
           <div>
-            <strong>テキストを選択 → 解説（⌘E）</strong>
-            <p>気になる箇所をドラッグ。日本語訳・用語解説・「要するにどういうことか」が表示されます</p>
+            <strong data-i18n="welcome.step2_title">テキストを選択 → 解説（⌘E）</strong>
+            <p data-i18n="welcome.step2_desc">気になる箇所をドラッグ。翻訳・用語解説・「要するにどういうことか」が表示されます</p>
           </div>
         </div>
         <div class="welcome-step">
           <span class="step-num" aria-hidden="true">3</span>
           <div>
-            <strong>しおり・メモ・レイアウト</strong>
-            <p>⌘D しおり追加、⌘B メモ開閉、⌘J メモフォーカス、⌘M 論文一覧、⊞ ボタンで標準/3カラム切替。←/→ でページ送り</p>
+            <strong data-i18n="welcome.step3_title">しおり・メモ・レイアウト</strong>
+            <p data-i18n="welcome.step3_desc">⌘D しおり追加、⌘B メモ開閉、⌘J メモフォーカス、⌘M 論文一覧、⊞ ボタンで標準/3カラム切替。←/→ でページ送り</p>
           </div>
         </div>
         <div class="welcome-step">
-          <span class="step-num" aria-hidden="true">✨</span>
+          <span class="step-num" aria-hidden="true">+</span>
           <div>
-            <strong>論文に質問（オプション）</strong>
-            <p>⚙ 設定からAPIキー（Gemini/OpenAI/Claude/ローカルAI）を登録すると、論文全文を踏まえた質問ができます</p>
+            <strong data-i18n="welcome.step4_title">論文に質問（オプション）</strong>
+            <p data-i18n="welcome.step4_desc">設定からAPIキー（Gemini/OpenAI/Claude/ローカルAI）を登録すると、論文全文を踏まえた質問ができます</p>
           </div>
         </div>
       </div>
-      <div class="welcome-tip">💡 ヘッダー右端の <strong>?</strong> にカーソルを乗せるとショートカット一覧</div>
-      <button id="welcomeStart">はじめる</button>
+      <div class="welcome-tip" data-i18n-html="welcome.tip">ヘッダー右端の <strong>?</strong> にカーソルを乗せるとショートカット一覧</div>
+      <button id="welcomeStart" data-i18n="welcome.start">はじめる</button>
     </div>
   </dialog>
 
-  <dialog id="exportDialog" aria-label="PDF出力プレビュー">
+  <dialog id="exportDialog" data-i18n-aria="export.dialog_aria" aria-label="PDF出力プレビュー">
     <div class="settings-head">
-      <strong>📄 PDF出力プレビュー</strong>
-      <button id="exportClose" aria-label="閉じる" title="閉じる">×</button>
+      <strong data-i18n="export.title">PDF出力プレビュー</strong>
+      <button id="exportClose" data-i18n-aria="export.close_aria" data-i18n-title="export.close_title" aria-label="閉じる" title="閉じる">×</button>
     </div>
     <div id="exportPreview"></div>
     <div class="settings-foot">
-      <span class="muted">印刷ダイアログで「PDFとして保存」を選択</span>
+      <span class="muted" data-i18n="export.hint">印刷ダイアログで「PDFとして保存」を選択</span>
       <span class="spacer"></span>
-      <button id="exportPrint">印刷 / PDF保存</button>
+      <button id="exportPrint" data-i18n="export.print">印刷 / PDF保存</button>
     </div>
   </dialog>
 
-  <dialog id="confirmDialog" aria-label="確認">
+  <dialog id="confirmDialog" data-i18n-aria="confirm.dialog_aria" aria-label="確認">
     <p id="confirmMsg"></p>
     <div class="confirm-buttons">
-      <button id="confirmCancel">キャンセル</button>
-      <button id="confirmOk" class="danger">削除</button>
+      <button id="confirmCancel" data-i18n="confirm.cancel">キャンセル</button>
+      <button id="confirmOk" class="danger" data-i18n="confirm.delete">削除</button>
     </div>
   </dialog>
 

@@ -22,6 +22,37 @@ import uvicorn
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_MODEL = "qwen3.5:4b"
 
+_desktop_translations = {}
+
+
+def _load_desktop_translations():
+    global _desktop_translations
+    lang = "ja"
+    try:
+        settings = os.path.join(APP_DIR, ".settings.json")
+        lang = json.loads(open(settings, encoding="utf-8").read()).get("ui_language", "ja")
+    except Exception:  # noqa: BLE001
+        pass
+    path = os.path.join(APP_DIR, "static", "locales", f"{lang}.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            _desktop_translations = json.loads(f.read())
+    except Exception:  # noqa: BLE001
+        path_ja = os.path.join(APP_DIR, "static", "locales", "ja.json")
+        try:
+            with open(path_ja, encoding="utf-8") as f:
+                _desktop_translations = json.loads(f.read())
+        except Exception:  # noqa: BLE001
+            pass
+    return lang
+
+
+def _dt(key, **kwargs):
+    s = _desktop_translations.get(key, key)
+    for k, v in kwargs.items():
+        s = s.replace(f"{{{k}}}", str(v))
+    return s
+
 _we_started_ollama = False
 _ollama_proc: subprocess.Popen | None = None
 _cleanup_done = False
@@ -40,11 +71,11 @@ def _icon_data_uri() -> str:
         return "data:image/png;base64," + base64.b64encode(f.read()).decode()
 
 
-def _build_loading_html() -> str:
+def _build_loading_html(lang="ja") -> str:
     icon_uri = _icon_data_uri()
     icon_tag = f'<img class="icon" src="{icon_uri}" width="80" height="80" alt="" />' if icon_uri else '<div class="icon">NH</div>'
     return f"""<!DOCTYPE html>
-<html lang="ja">
+<html lang="{lang}">
 <head>
 <meta charset="UTF-8">
 <style>
@@ -83,13 +114,13 @@ def _build_loading_html() -> str:
 <body>
   {icon_tag}
   <div class="title">Naruhodo</div>
-  <div id="status">起動準備中…</div>
+  <div id="status">{_dt("desktop.preparing")}</div>
   <div class="bar-wrap"><div id="bar"></div></div>
 </body>
 </html>"""
 
 
-LOADING_HTML = _build_loading_html()
+LOADING_HTML = None
 
 
 def _free_port() -> int:
@@ -176,7 +207,7 @@ def _pull_model_with_progress(window, model: str) -> None:
                 msg = f"{status}（{size_mb:.0f}/{total_mb:.0f} MB）"
             else:
                 pct = 52
-                msg = status or f"モデルをダウンロード中（{model}）…"
+                msg = status or _dt("desktop.downloading_model", model=model)
             _update_loading(window, msg, min(pct, 68))
     conn.close()
 
@@ -245,13 +276,13 @@ def _init_sparkle() -> None:
 def _boot(window) -> None:
     """バックグラウンドで全セットアップを行い、完了後に本体へ遷移する。"""
     # 1. Ollama 確認・起動
-    _update_loading(window, "Ollama を確認中…", 10)
+    _update_loading(window, _dt("desktop.checking_ollama"), 10)
     if not _ollama_installed():
-        _update_loading(window, "Ollama をインストール中…", 15)
+        _update_loading(window, _dt("desktop.installing_ollama"), 15)
         _install_ollama()
 
     if not _ollama_up():
-        _update_loading(window, "Ollama を起動中…", 20)
+        _update_loading(window, _dt("desktop.starting_ollama"), 20)
         try:
             if os.path.isdir("/Applications/Ollama.app"):
                 subprocess.Popen(["open", "-a", "Ollama"])
@@ -267,32 +298,32 @@ def _boot(window) -> None:
         for i in range(30):
             if _ollama_up():
                 break
-            _update_loading(window, "Ollama を起動中…", 20 + i)
+            _update_loading(window, _dt("desktop.starting_ollama"), 20 + i)
             time.sleep(0.5)
 
-    _update_loading(window, "モデルを確認中…", 50)
+    _update_loading(window, _dt("desktop.checking_model"), 50)
 
     # 2. モデル確認・pull（Ollama API で進捗を取得）
     if _ollama_up():
         model = _current_model()
         if not _model_present(model):
-            _update_loading(window, f"モデルをダウンロード中（{model}）…", 52)
+            _update_loading(window, _dt("desktop.downloading_model", model=model), 52)
             try:
                 _pull_model_with_progress(window, model)
             except Exception as e:  # noqa: BLE001
                 print(f"[naruhodo] Model pull failed: {e}")
 
-    _update_loading(window, "アプリを起動中…", 70)
+    _update_loading(window, _dt("desktop.starting_app"), 70)
 
     # 3. サーバー起動・待機
     threading.Thread(target=_run_server, daemon=True).start()
     for i in range(80):
         if _server_up():
             break
-        _update_loading(window, "アプリを起動中…", 70 + min(i, 25))
+        _update_loading(window, _dt("desktop.starting_app"), 70 + min(i, 25))
         time.sleep(0.25)
 
-    _update_loading(window, "準備完了", 100)
+    _update_loading(window, _dt("desktop.ready"), 100)
     time.sleep(0.3)
 
     # 4. 本体へ遷移
@@ -345,7 +376,10 @@ def _handle_term(signum, _frame):
 
 
 def main() -> None:
+    global LOADING_HTML
     print(f"[naruhodo] starting on port {PORT}")
+    ui_lang = _load_desktop_translations()
+    LOADING_HTML = _build_loading_html(ui_lang)
     _init_sparkle()
     atexit.register(_cleanup_ollama)
     signal.signal(signal.SIGTERM, _handle_term)

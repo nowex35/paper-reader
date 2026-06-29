@@ -1,5 +1,70 @@
 /* Naruhodo — PDF選択 → その場で日本語訳＋解説 */
 
+const I18n = (() => {
+  let locale = {};
+  let fallback = {};
+  let lang = "ja";
+
+  function t(key, vars) {
+    let s = locale[key] ?? fallback[key] ?? key;
+    if (vars) {
+      for (const [k, v] of Object.entries(vars))
+        s = s.replaceAll(`{${k}}`, v);
+    }
+    return s;
+  }
+
+  async function load(newLang) {
+    try {
+      const resp = await fetch(`/locales/${newLang}.json`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      locale = data;
+      lang = newLang;
+      if (newLang === "ja") fallback = { ...data };
+    } catch {}
+    applyDom();
+  }
+
+  async function init(uiLang) {
+    try {
+      const r = await fetch("/locales/ja.json");
+      if (r.ok) fallback = await r.json();
+    } catch {}
+    if (uiLang && uiLang !== "ja") {
+      try {
+        const r = await fetch(`/locales/${uiLang}.json`);
+        if (r.ok) locale = await r.json();
+      } catch {}
+    } else {
+      locale = { ...fallback };
+    }
+    lang = uiLang || "ja";
+    applyDom();
+  }
+
+  function applyDom() {
+    document.querySelectorAll("[data-i18n]").forEach(el => {
+      el.textContent = t(el.dataset.i18n);
+    });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+      el.placeholder = t(el.dataset.i18nPlaceholder);
+    });
+    document.querySelectorAll("[data-i18n-title]").forEach(el => {
+      el.title = t(el.dataset.i18nTitle);
+    });
+    document.querySelectorAll("[data-i18n-aria]").forEach(el => {
+      el.setAttribute("aria-label", t(el.dataset.i18nAria));
+    });
+    document.querySelectorAll("[data-i18n-html]").forEach(el => {
+      el.innerHTML = t(el.dataset.i18nHtml);
+    });
+    document.documentElement.lang = lang;
+  }
+
+  return { t, load, init, applyDom, get lang() { return lang; } };
+})();
+
 function appConfirm(msg) {
   return new Promise((resolve) => {
     const d = document.getElementById("confirmDialog");
@@ -93,6 +158,51 @@ const els = {
 };
 
 
+/* ---------- 解説モード切替 ---------- */
+const ExplainMode = (() => {
+  const MODES = ["explain", "summarize", "math", "critical", "relate"];
+  const KEYS = ["mode.explain", "mode.summarize", "mode.math", "mode.critical", "mode.relate"];
+  let idx = 0;
+  const btn = document.getElementById("modeBtn");
+
+  function update() {
+    if (btn) btn.textContent = I18n.t(KEYS[idx]);
+    if (els.fab) els.fab.textContent = I18n.t(KEYS[idx]) + " ⌘E";
+  }
+
+  function set(i) {
+    idx = Math.max(0, Math.min(MODES.length - 1, i));
+    update();
+    if (btn) {
+      btn.classList.remove("flash");
+      void btn.offsetWidth;
+      btn.classList.add("flash");
+    }
+  }
+
+  function next() {
+    set((idx + 1) % MODES.length);
+  }
+
+  function current() { return MODES[idx]; }
+
+  if (btn) btn.addEventListener("click", next);
+
+  document.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= MODES.length) {
+      e.preventDefault();
+      set(n - 1);
+    }
+  });
+
+  return { current, next, set, update };
+})();
+
+
 /* ---------- ローカルLLM(Ollama) セットアップ確認 ＋ モデル切替 ---------- */
 // ヘッダーの <select> にインストール済みモデルを並べ、選んだら /api/model で
 // 即座に切り替える（サーバが設定ファイルへ永続化）。Ollama 未起動・モデル
@@ -106,25 +216,19 @@ const Model = (() => {
     if (!s.running) {
       guide.innerHTML = '<div class="body"></div>';
       guide.querySelector(".body").innerHTML = renderMarkdown(
-        "### ⚙️ 初回セットアップ\n\n" +
-        "解説にはローカルLLM（Ollama）を使います。クラウド送信なし・APIキー不要。\n\n" +
-        "1. [Ollama をインストール](https://ollama.com/download)\n" +
-        "2. Ollama アプリを起動\n" +
-        "3. このページを再読み込み\n\n" +
-        "モデルのダウンロードはアプリが自動で行います。"
+        I18n.t("setup.title") + "\n\n" + I18n.t("setup.body")
       );
     } else {
       guide.innerHTML =
         '<div class="body"></div>' +
-        '<div class="toolbar"><button class="pullBtn">📥 モデルをダウンロード（' + s.model + '）</button></div>';
+        '<div class="toolbar"><button class="pullBtn">' + I18n.t("model.download_btn", { model: s.model }) + '</button></div>';
       guide.querySelector(".body").innerHTML = renderMarkdown(
-        "### ⚙️ モデルが必要です\n\n" +
-        "下のボタンを押すとダウンロードが始まります（初回のみ・約3GB）。"
+        I18n.t("setup.model_needed_title") + "\n\n" + I18n.t("setup.model_needed_body")
       );
       guide.querySelector(".pullBtn").onclick = async (ev) => {
         const btn = ev.target;
         btn.disabled = true;
-        btn.textContent = "ダウンロード中…";
+        btn.textContent = I18n.t("model.downloading");
         const body = guide.querySelector(".body");
         try {
           const resp = await fetch("/api/pull-model", { method: "POST" });
@@ -141,12 +245,12 @@ const Model = (() => {
             setTimeout(() => location.reload(), 1500);
           } else {
             btn.disabled = false;
-            btn.textContent = "📥 再試行";
+            btn.textContent = I18n.t("model.retry");
           }
         } catch (e) {
-          body.textContent = "⚠️ エラー: " + e.message;
+          body.textContent = I18n.t("model.error", { msg: e.message });
           btn.disabled = false;
-          btn.textContent = "📥 再試行";
+          btn.textContent = I18n.t("model.retry");
         }
       };
     }
@@ -165,7 +269,7 @@ const Model = (() => {
     if (s.model && !models.includes(s.model)) {
       const o = document.createElement("option");
       o.value = s.model;
-      o.textContent = s.model + (s.model_present ? "" : "（未取得）");
+      o.textContent = s.model + (s.model_present ? "" : I18n.t("model.not_fetched"));
       sel.appendChild(o);
     }
     for (const name of models) {
@@ -191,7 +295,7 @@ const Model = (() => {
   if (sel) {
     sel.addEventListener("change", async () => {
       const model = sel.value;
-      els.status.textContent = "モデル切替中…";
+      els.status.textContent = I18n.t("model.switching");
       try {
         const r = await fetch("/api/model", {
           method: "POST",
@@ -200,11 +304,11 @@ const Model = (() => {
         });
         if (!r.ok) throw new Error("HTTP " + r.status);
         const s = await r.json();
-        els.status.textContent = "モデル: " + (s.model || model);
+        els.status.textContent = I18n.t("model.switched", { name: s.model || model });
         if (!s.model_present)
           showGuide({ running: true, model: s.model, model_present: false });
       } catch (e) {
-        els.status.textContent = "⚠️ モデル切替失敗: " + e.message;
+        els.status.textContent = I18n.t("model.switch_failed", { msg: e.message });
       }
     });
   }
@@ -385,7 +489,7 @@ async function openPdfBuffer(buf, name, id) {
   els.fab.hidden = true;
   els.fileName.textContent = name;
   els.fileName.classList.remove("muted");
-  els.status.textContent = "読み込み中…";
+  els.status.textContent = I18n.t("pdf.loading");
   els.container.innerHTML = "";
   Bookmarks.load(id);
   Conversations.load(id);
@@ -423,6 +527,7 @@ async function openPdfBuffer(buf, name, id) {
   }
   Bookmarks.renderMarkers();
   Finder.refresh();
+  References.scan();
   els.pdfPane.focus();
   if (switching) fadeOut();
   return true;
@@ -439,7 +544,7 @@ function cachePdf(id, buf) {
 
 async function loadPdf(file) {
   if (file.type && file.type !== "application/pdf") {
-    els.status.textContent = "PDFではありません";
+    els.status.textContent = I18n.t("pdf.not_pdf");
     return;
   }
   const buf = await file.arrayBuffer();
@@ -489,7 +594,7 @@ function liveZoom(targetEff, cxv, cyv) {
   const docX = sl + cxv, docY = st + cyv;
   pane.scrollLeft = docX * ratio - cxv;
   pane.scrollTop = docY * ratio - cyv;
-  els.status.textContent = `ズーム ${Math.round(targetEff * 100)}%`;
+  els.status.textContent = I18n.t("pdf.zoom", { pct: Math.round(targetEff * 100) });
 
   renderToken++; // 進行中の再描画を無効化
   clearTimeout(commitTimer);
@@ -526,8 +631,9 @@ async function commitZoom() {
   pane.scrollLeft = keepL;
   pane.scrollTop = keepT;
   els.status.textContent = zoom !== 1 ? `${Math.round(zoom * 100)}%` : "";
-  Bookmarks.renderMarkers(); // 再描画でマーカーDOMも消えるので貼り直し
-  Finder.refresh(); // ハイライトも貼り直し
+  Bookmarks.renderMarkers();
+  Finder.refresh();
+  References.scan();
 }
 
 els.pdfPane.addEventListener(
@@ -917,12 +1023,13 @@ const PdfSelection = (() => {
     }
     els.fab.style.left = Math.max(8, rect.left) + "px";
     els.fab.style.top = rect.bottom + 8 + "px";
+    ExplainMode.update();
     els.fab.hidden = false;
     els.fab._payload = current;
   }
 
   els.pdfPane.addEventListener("pointerdown", (e) => {
-    if (!pdfDoc || e.button !== 0 || e.target.closest("button,input,textarea,select,.bookmark-marker,.bookmark-guide")) return;
+    if (!pdfDoc || e.button !== 0 || e.target.closest("button,input,textarea,select,.bookmark-marker,.bookmark-guide,.cite-link")) return;
     const wrap = e.target.closest(".pageWrap");
     if (!wrap) return;
     window.getSelection()?.removeAllRanges();
@@ -968,7 +1075,7 @@ els.pdfPane.addEventListener("scroll", () => {
 els.fab.onclick = () => {
   els.fab.hidden = true;
   const s = els.fab._payload;
-  if (s) explain(s.text, s.context);
+  if (s) explain(s.text, s.context, ExplainMode.current());
 };
 
 // ⌘/Ctrl + C — PDF選択テキストをクリップボードにコピー
@@ -978,19 +1085,32 @@ document.addEventListener("keydown", (e) => {
     if (s) {
       e.preventDefault();
       navigator.clipboard.writeText(s.text);
-      els.status.textContent = "コピーしました";
+      els.status.textContent = I18n.t("pdf.copied");
     }
   }
 });
 
 // ⌘/Ctrl + E
 document.addEventListener("keydown", (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "e") {
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "e") {
     e.preventDefault();
     const s = currentSelection();
     if (s) {
       els.fab.hidden = true;
-      explain(s.text, s.context);
+      explain(s.text, s.context, ExplainMode.current());
+    }
+  }
+});
+
+// ⌘/Ctrl + Shift + E — 選択テキストをメモに引用追加
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "e") {
+    e.preventDefault();
+    const s = currentSelection();
+    if (s && s.text) {
+      els.fab.hidden = true;
+      Memo.appendText(s.text);
+      els.status.textContent = I18n.t("memo.quote_added");
     }
   }
 });
@@ -1028,16 +1148,16 @@ const Conversations = (() => {
       <div class="src"></div>
       <div class="body"></div>
       <div class="toolbar"><button class="copyBtn">${
-        item.type === "ask" ? "コピー(質問+回答)" : "コピー(原文+解説)"
+        item.type === "ask" ? I18n.t("ask.copy") : I18n.t("explain.copy")
       }</button></div>`;
     card.querySelector(".src").textContent = item.src;
     card.querySelector(".body").innerHTML = renderMarkdown(item.body);
     card.querySelector(".copyBtn").onclick = (ev) => {
       const prefix = item.type === "ask" ? `## Q\n${item.src}\n\n## A\n` : `> ${item.src}\n\n`;
       navigator.clipboard.writeText(prefix + item.body);
-      ev.target.textContent = "コピーしました ✓";
+      ev.target.textContent = item.type === "ask" ? I18n.t("ask.copied") : I18n.t("explain.copied");
       setTimeout(() => {
-        ev.target.textContent = item.type === "ask" ? "コピー(質問+回答)" : "コピー(原文+解説)";
+        ev.target.textContent = item.type === "ask" ? I18n.t("ask.copy") : I18n.t("explain.copy");
       }, 1500);
     };
     return card;
@@ -1054,9 +1174,9 @@ const Conversations = (() => {
       items = data.items || [];
     } catch { return; }
     if (!items.length) {
-      const base = "テキストを選択して ⌘E で日本語訳＋解説";
+      const base = I18n.t("explain.empty_hint");
       const askForm = document.getElementById("askForm");
-      const askHint = (askForm && !askForm.hidden) ? "<br />下の欄から論文全文を踏まえた質問もできます。" : "";
+      const askHint = (askForm && !askForm.hidden) ? "<br />" + I18n.t("explain.empty_hint_ask") : "";
       els.results.innerHTML = '<div class="empty">' + base + askHint + '</div>';
       return;
     }
@@ -1075,7 +1195,8 @@ const Conversations = (() => {
 })();
 
 /* ---------- 解説リクエスト ---------- */
-async function explain(text, context) {
+async function explain(text, context, mode) {
+  mode = mode || "explain";
   const empty = els.results.querySelector(".empty");
   if (empty) empty.remove();
 
@@ -1084,10 +1205,10 @@ async function explain(text, context) {
   card.innerHTML = `
     <div class="src"></div>
     <div class="body"></div>
-    <div class="toolbar"><button class="copyBtn">コピー(原文+解説)</button></div>`;
+    <div class="toolbar"><button class="copyBtn">${I18n.t("explain.copy")}</button></div>`;
   card.querySelector(".src").textContent = text;
   const body = card.querySelector(".body");
-  body.textContent = "解説を生成中…";
+  body.textContent = I18n.t("explain.generating");
   body.classList.add("waiting");
   els.results.appendChild(card);
   els.results.scrollTop = els.results.scrollHeight;
@@ -1103,7 +1224,7 @@ async function explain(text, context) {
     const resp = await fetch("/api/explain", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, context }),
+      body: JSON.stringify({ text, context, mode }),
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
@@ -1130,8 +1251,8 @@ async function explain(text, context) {
 
   card.querySelector(".copyBtn").onclick = (ev) => {
     navigator.clipboard.writeText(`> ${text}\n\n${acc}`);
-    ev.target.textContent = "コピーしました ✓";
-    setTimeout(() => (ev.target.textContent = "コピー(原文+解説)"), 1500);
+    ev.target.textContent = I18n.t("explain.copied");
+    setTimeout(() => (ev.target.textContent = I18n.t("explain.copy")), 1500);
   };
 }
 
@@ -1171,7 +1292,7 @@ const Ask = (() => {
     if (quoted) {
       const short = quoted.replace(/\s+/g, " ").slice(0, 200);
       quote.textContent = "“" + short + (quoted.length > 200 ? "…" : "") + "”";
-      quote.title = "クリックで引用を外す";
+      quote.title = I18n.t("ask.quote_dismiss");
       quote.hidden = false;
     } else {
       quote.hidden = true;
@@ -1193,10 +1314,10 @@ const Ask = (() => {
       const r = await fetch("/api/ask-status");
       if (!r.ok) return;
       const s = await r.json();
-      const NAMES = { gemini: "Gemini", openai: "OpenAI", anthropic: "Claude", custom: "カスタム" };
+      const NAMES = { gemini: "Gemini", openai: "OpenAI", anthropic: "Claude", custom: I18n.t("ask.provider_custom") };
       if (s.available) {
         setFormVisible(true);
-        meta.textContent = "質問: " + (NAMES[s.provider] || s.provider) + " " + s.model;
+        meta.textContent = I18n.t("ask.meta_label", { provider: NAMES[s.provider] || s.provider, model: s.model });
       } else {
         setFormVisible(false);
         meta.textContent = "";
@@ -1208,7 +1329,7 @@ const Ask = (() => {
     const q = input.value.trim();
     if (!q || busy) return;
     if (!pdfDoc) {
-      meta.textContent = "先に PDF を開いてください";
+      meta.textContent = I18n.t("ask.open_pdf_first");
       return;
     }
     const selection = quoted;
@@ -1226,12 +1347,12 @@ const Ask = (() => {
     card.innerHTML = `
       <div class="src"></div>
       <div class="body"></div>
-      <div class="toolbar"><button class="copyBtn">コピー(質問+回答)</button></div>`;
+      <div class="toolbar"><button class="copyBtn">${I18n.t("ask.copy")}</button></div>`;
     card.querySelector(".src").textContent =
       (selection ? "「" + selection.replace(/\s+/g, " ").slice(0, 200) + "」\n\n" : "") +
       "Q: " + q;
     const body = card.querySelector(".body");
-    body.textContent = "回答を生成中…";
+    body.textContent = I18n.t("ask.generating");
     body.classList.add("waiting");
     els.results.appendChild(card);
     els.results.scrollTop = els.results.scrollHeight;
@@ -1269,7 +1390,7 @@ const Ask = (() => {
       paperCachedId = currentPdfId;
       history.push({
         role: "user",
-        text: (selection ? "（引用）" + selection + "\n" : "") + q,
+        text: (selection ? I18n.t("ask.quote_prefix") + selection + "\n" : "") + q,
       });
       history.push({ role: "model", text: acc });
     } catch (e) {
@@ -1283,8 +1404,8 @@ const Ask = (() => {
     if (acc) Conversations.push("ask", srcText, acc);
     card.querySelector(".copyBtn").onclick = (ev) => {
       navigator.clipboard.writeText(`## Q\n${q}\n\n## A\n${acc}`);
-      ev.target.textContent = "コピーしました ✓";
-      setTimeout(() => (ev.target.textContent = "コピー(質問+回答)"), 1500);
+      ev.target.textContent = I18n.t("ask.copied");
+      setTimeout(() => (ev.target.textContent = I18n.t("ask.copy")), 1500);
     };
     busy = false;
     send.disabled = false;
@@ -1463,10 +1584,10 @@ const Bookmarks = (() => {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items }),
-    }).catch(() => flash("⚠️ しおりのサーバ保存に失敗（ローカルには保存済み）"));
+    }).catch(() => flash(I18n.t("bookmark.save_failed")));
   }
   function updateBadge() {
-    if (btn) btn.textContent = `🔖 ${items.length}`;
+    if (btn) btn.textContent = items.length;
     const group = document.getElementById("bookmarkGroup");
     if (group) group.classList.toggle("empty", items.length === 0);
   }
@@ -1486,7 +1607,7 @@ const Bookmarks = (() => {
       if (!wrap) return;
       const m = document.createElement("div");
       m.className = "bookmark-marker";
-      m.title = `#${idx + 1} クリックで削除`;
+      m.title = I18n.t("bookmark.marker_title", { index: idx + 1 });
       m.style.top = b.y * 100 + "%";
       m.textContent = String(idx + 1);
       m.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -1561,7 +1682,7 @@ const Bookmarks = (() => {
 
   function toggle() {
     if (!pdfDoc) {
-      flash("PDFを開いてからブックマークできます");
+      flash(I18n.t("bookmark.need_pdf"));
       return;
     }
     const loc = currentLocation();
@@ -1585,16 +1706,16 @@ const Bookmarks = (() => {
     items.splice(idx, 1);
     persist();
     renderMarkers();
-    flash(`ブックマーク削除（残り ${items.length}）`);
+    flash(I18n.t("bookmark.deleted", { count: items.length }));
   }
 
   async function clear() {
     if (!items.length) return;
-    if (!(await appConfirm(`ブックマーク ${items.length} 件を全て削除しますか？`))) return;
+    if (!(await appConfirm(I18n.t("bookmark.confirm_clear", { count: items.length })))) return;
     items = [];
     persist();
     renderMarkers();
-    flash("ブックマークを全削除");
+    flash(I18n.t("bookmark.cleared"));
   }
 
   function jumpTo(idx) {
@@ -1617,11 +1738,11 @@ const Bookmarks = (() => {
         setTimeout(() => m.classList.remove("flash"), 1200);
       }
     });
-    flash(`ブックマーク #${idx + 1} / ${items.length}`);
+    flash(I18n.t("bookmark.jumped", { index: idx + 1, total: items.length }));
   }
 
   function next() {
-    if (!items.length) return flash("ブックマークはまだありません（⌘B で追加）");
+    if (!items.length) return flash(I18n.t("bookmark.none"));
     const loc = currentLocation();
     let i = items.findIndex(
       (b) =>
@@ -1633,7 +1754,7 @@ const Bookmarks = (() => {
   }
 
   function prev() {
-    if (!items.length) return flash("ブックマークはまだありません（⌘B で追加）");
+    if (!items.length) return flash(I18n.t("bookmark.none"));
     const loc = currentLocation();
     let i = -1;
     for (let k = items.length - 1; k >= 0; k--) {
@@ -1872,6 +1993,113 @@ const Finder = (() => {
   });
 
   return { open, close, refresh };
+})();
+
+/* ---------- 参考文献リンク ---------- */
+const References = (() => {
+  const NUM_RE = /^\[(\d+(?:[,;\s–\-]+\d+)*)\]$/;
+  const AUTH_RE = /^\[([A-Z][^\]]{0,80}?\d{2,4}[a-z]?)\]$/;
+
+  function scan() {
+    document.querySelectorAll(".cite-link").forEach(el => {
+      el.classList.remove("cite-link");
+      delete el.dataset.citeKey;
+    });
+    const pages = els.container.querySelectorAll(".pageWrap");
+    pages.forEach(wrap => {
+      const tl = wrap.querySelector(".textLayer");
+      if (!tl) return;
+      tl.querySelectorAll("span").forEach(span => {
+        const text = (span.textContent || "").trim();
+        if (!text.startsWith("[") || !text.endsWith("]")) return;
+        const mn = NUM_RE.exec(text);
+        const ma = AUTH_RE.exec(text);
+        if (!mn && !ma) return;
+        span.classList.add("cite-link");
+        span.dataset.citeKey = (mn ? mn[1] : ma[1]);
+      });
+    });
+  }
+
+  function jumpToRef(key) {
+    const pages = [...els.container.querySelectorAll(".pageWrap")];
+    const end = pages.slice(Math.max(0, pages.length - 5));
+    const isNum = /^\d+(?:[,;\s–\-]+\d+)*$/.test(key);
+    const firstNum = isNum ? key.replace(/[,;\s–\-]+.*/, "").trim() : "";
+    const authorPart = isNum ? "" : key.replace(/\d+[a-z]?$/, "").trim();
+
+    for (const page of end) {
+      const tl = page.querySelector(".textLayer");
+      if (!tl) continue;
+      for (const span of tl.querySelectorAll("span")) {
+        const t = span.textContent || "";
+        if (isNum) {
+          if (t.includes(`[${firstNum}]`) || t.match(new RegExp(`^\\s*${firstNum}[.\\s)]`))) {
+            scrollToSpan(span);
+            return true;
+          }
+        } else {
+          if (authorPart && t.includes(authorPart)) {
+            scrollToSpan(span);
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  function scrollToSpan(span) {
+    const pr = els.pdfPane.getBoundingClientRect();
+    const sr = span.getBoundingClientRect();
+    els.pdfPane.scrollTop += sr.top - pr.top - pr.height * 0.3;
+    document.querySelectorAll(".ref-flash").forEach(el => el.classList.remove("ref-flash"));
+    span.classList.add("ref-flash");
+    setTimeout(() => span.classList.remove("ref-flash"), 2500);
+  }
+
+  function searchScholar(key) {
+    const pages = [...els.container.querySelectorAll(".pageWrap")];
+    const end = pages.slice(Math.max(0, pages.length - 5));
+    const isNum = /^\d+(?:[,;\s–\-]+\d+)*$/.test(key);
+    const firstNum = isNum ? key.replace(/[,;\s–\-]+.*/, "").trim() : "";
+    const authorPart = isNum ? "" : key.replace(/\d+[a-z]?$/, "").trim();
+    let refText = "";
+    for (const page of end) {
+      const items = page._textItems || [];
+      for (let i = 0; i < items.length; i++) {
+        const t = items[i].str || "";
+        const match = isNum
+          ? (t.includes(`[${firstNum}]`) || t.match(new RegExp(`^\\s*${firstNum}[.\\s)]`)))
+          : (authorPart && t.includes(authorPart));
+        if (match) {
+          refText = items.slice(i, i + 8).map(it => it.str).join(" ").trim();
+          break;
+        }
+      }
+      if (refText) break;
+    }
+    const query = refText
+      ? refText.replace(/^\[?\d+\]?\s*/, "").slice(0, 200)
+      : key;
+    window.open("https://scholar.google.com/scholar?q=" + encodeURIComponent(query), "_blank");
+  }
+
+  els.pdfPane.addEventListener("click", (e) => {
+    const span = e.target.closest(".cite-link");
+    if (!span) return;
+    const key = span.dataset.citeKey;
+    if (!key) return;
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
+      searchScholar(key);
+    } else {
+      if (!jumpToRef(key)) {
+        searchScholar(key);
+      }
+    }
+  });
+
+  return { scan };
 })();
 
 /* ---------- メモ（論文ごとの自分用まとめ） ---------- */
@@ -2162,7 +2390,7 @@ const Memo = (() => {
     setEditable(true);
     refreshCM();
     if (preview) renderPreview();
-    setStatus(note.updated ? "保存済み " + fmtDate(note.updated) : "新規メモ");
+    setStatus(note.updated ? I18n.t("memo.saved", { date: fmtDate(note.updated) }) : I18n.t("memo.new_memo"));
     emit("memo-opened", { id: cur.id });
   }
   function blank(id, pdfName) {
@@ -2175,7 +2403,7 @@ const Memo = (() => {
     setEditable(true);
     refreshCM();
     if (preview) renderPreview();
-    setStatus("新規メモ（入力すると自動保存）");
+    setStatus(I18n.t("memo.new_memo"));
     emit("memo-opened", { id: cur.id });
   }
 
@@ -2215,7 +2443,7 @@ const Memo = (() => {
     dirty = true;
     dirtyVersion++;
     syncDirtyIndicator();
-    setStatus("編集中…");
+    setStatus(I18n.t("memo.editing"));
     clearTimeout(saveTimer);
     saveTimer = setTimeout(save, 1200);
     if (preview) renderPreview();
@@ -2224,7 +2452,7 @@ const Memo = (() => {
     if (saving) return saving;
     if (!cur || !dirty) return;
     clearTimeout(saveTimer);
-    setStatus("保存中…");
+    setStatus(I18n.t("memo.saving"));
     const id = cur.id;
     const pdf = cur.pdf || null;
     const payload = {
@@ -2246,11 +2474,11 @@ const Memo = (() => {
           cur.title = d.title;
           dirty = false;
           syncDirtyIndicator();
-          setStatus("保存済み " + fmtDate(d.updated));
+          setStatus(I18n.t("memo.saved", { date: fmtDate(d.updated) }));
         }
         emit("memos-changed");
       } catch (e) {
-        setStatus("⚠️ 保存失敗: " + e.message);
+        setStatus(I18n.t("memo.save_failed", { msg: e.message }));
       } finally {
         saving = null;
       }
@@ -2267,7 +2495,7 @@ const Memo = (() => {
 
   function renderPreview() {
     previewEl.innerHTML = renderMarkdown(
-      getBody() || "_（まだ何も書かれていません）_"
+      getBody() || I18n.t("memo.empty_preview")
     );
   }
   function setPreview(on) {
@@ -2276,7 +2504,7 @@ const Memo = (() => {
     if (cm) cm.getWrapperElement().style.display = on ? "none" : "";
     else bodyEl.hidden = on;
     previewEl.hidden = !on;
-    previewBtn.textContent = on ? "編集に戻る" : "プレビュー";
+    previewBtn.textContent = on ? I18n.t("memo.edit_back") : I18n.t("memo.preview");
     if (on) renderPreview();
     else refreshCM();
   }
@@ -2319,13 +2547,13 @@ const Memo = (() => {
 
     function openExport() {
       if (!cur || !exportDialog) return;
-      const title = titleEl.value.trim() || "メモ";
+      const title = titleEl.value.trim() || I18n.t("memo.export_label");
       const body = getBody();
-      const html = renderMarkdown(body || "_(メモは空です)_");
+      const html = renderMarkdown(body || I18n.t("memo.empty_export"));
       const esc = title.replace(/&/g, "&amp;").replace(/</g, "&lt;");
       exportPreview.innerHTML = `<h1>${esc}</h1>${html}`;
       origTitle = document.title;
-      document.title = title + "_メモ";
+      document.title = title + I18n.t("memo.title_suffix");
       exportDialog.showModal();
     }
 
@@ -2343,13 +2571,13 @@ const Memo = (() => {
   }
 
   $("memoDeleteBtn").onclick = async () => {
-    if (!cur || !(await appConfirm("このメモを削除しますか？"))) return;
+    if (!cur || !(await appConfirm(I18n.t("memo.confirm_delete")))) return;
     await fetch("/api/notes/" + cur.id, { method: "DELETE" });
     cur = null;
     titleEl.value = "";
     setBody("");
     setEditable(false);
-    setStatus("削除しました");
+    setStatus(I18n.t("memo.deleted"));
     emit("memos-changed");
   };
   document.addEventListener("keydown", (e) => {
@@ -2400,7 +2628,26 @@ const Memo = (() => {
   if (localStorage.getItem("memoPreview") === "1") setPreview(true);
   if (localStorage.getItem("memoOpen") === "1") setOpen(true);
 
-  return { openForPdf, openExisting, setOpen, flush };
+  function appendText(text) {
+    if (!cur) return;
+    if (!panel.classList.contains("open")) setOpen(true);
+    if (preview) setPreview(false);
+    const quote = "\n\n> " + text.replace(/\n/g, "\n> ") + "\n\n";
+    if (cm) {
+      const last = cm.lastLine();
+      const end = { line: last, ch: cm.getLine(last).length };
+      cm.replaceRange(quote, end);
+      cm.setCursor({ line: cm.lastLine(), ch: 0 });
+      cm.focus();
+    } else {
+      bodyEl.value += quote;
+      bodyEl.scrollTop = bodyEl.scrollHeight;
+      bodyEl.focus();
+    }
+    markDirty();
+  }
+
+  return { openForPdf, openExisting, setOpen, flush, appendText };
 })();
 
 /* ---------- 左サイドバー: 読んだ論文の一覧（ChatGPT風） ---------- */
@@ -2446,7 +2693,7 @@ const Memo = (() => {
     if (!list.length) {
       itemsEl.innerHTML =
         '<li class="li-empty">' +
-        (all.length ? "該当なし" : "まだメモはありません。PDFを開いて書き始めましょう。") +
+        (all.length ? I18n.t("list.no_match") : I18n.t("list.empty")) +
         "</li>";
       return;
     }
@@ -2457,7 +2704,7 @@ const Memo = (() => {
         '<div class="li-main"><div class="li-title"></div>' +
         '<div class="li-sub"></div></div>' +
         '<button class="li-del" title="削除">×</button>';
-      li.querySelector(".li-title").textContent = n.title || "(無題)";
+      li.querySelector(".li-title").textContent = n.title || I18n.t("list.untitled");
       li.querySelector(".li-sub").textContent =
         fmtDate(n.updated) + (n.pdf ? " · " + n.pdf : "");
       li.querySelector(".li-main").onclick = async () => {
@@ -2467,19 +2714,18 @@ const Memo = (() => {
         const ok = await loadPdfFromCache(n.id, n.pdf || n.title);
         if (!ok) {
           Memo.openExisting(n.id);
-          els.status.textContent =
-            "このPDFは未キャッシュ（「PDFを開く」で一度開くと次回から復元）";
+          els.status.textContent = I18n.t("list.pdf_not_cached");
         }
       };
       li.querySelector(".li-del").onclick = async (e) => {
         e.stopPropagation();
-        if (!(await appConfirm(`「${n.title}」を削除しますか？\nメモ・しおり・会話履歴も消えます。`))) return;
+        if (!(await appConfirm(I18n.t("list.confirm_delete", { title: n.title })))) return;
         await fetch("/api/notes/" + n.id, { method: "DELETE" });
         if (n.id === activeId) {
           pdfDoc = null;
           currentPdfId = null;
-          els.container.innerHTML = '<div id="dropHint"><img class="drop-icon" src="/static/icon-64.png" width="64" height="64" alt="" /><p>PDFをここにドラッグ&ドロップ、または「📂 PDFを開く」</p></div>';
-          els.fileName.textContent = "ファイル未選択";
+          els.container.innerHTML = '<div id="dropHint"><img class="drop-icon" src="/icon-64.png" width="64" height="64" alt="" /><p>' + I18n.t("pdf.drop_hint") + '</p></div>';
+          els.fileName.textContent = I18n.t("topbar.file_none");
           els.fileName.classList.add("muted");
           els.results.innerHTML = "";
           els.status.textContent = "";
@@ -2577,6 +2823,18 @@ const Memo = (() => {
   refresh();
 })();
 
+/* ---------- ダークモード ---------- */
+(() => {
+  const chk = document.getElementById("settingsDarkMode");
+  function apply(dark) {
+    document.documentElement.dataset.theme = dark ? "dark" : "";
+    localStorage.setItem("darkMode", dark ? "1" : "0");
+    if (chk) chk.checked = dark;
+  }
+  if (chk) chk.addEventListener("change", () => apply(chk.checked));
+  apply(localStorage.getItem("darkMode") === "1");
+})();
+
 /* ---------- レイアウト切替 ---------- */
 (() => {
   const btn = document.getElementById("layoutBtn");
@@ -2610,7 +2868,7 @@ const Memo = (() => {
   function apply(layout) {
     document.body.dataset.layout = layout;
     btn.textContent = LABELS[layout] || "⧉";
-    btn.title = layout === "standard" ? "3カラムに切替" : "標準に切替";
+    btn.title = layout === "standard" ? I18n.t("topbar.layout_to_columns") : I18n.t("topbar.layout_to_standard");
     btn.classList.toggle("active", layout === "columns");
     const panel = document.getElementById("memoPanel");
     const memoResizer = document.getElementById("memoResizer");
@@ -2680,6 +2938,8 @@ const Memo = (() => {
   const baseUrlLabel = document.getElementById("settingsBaseUrlLabel");
   const baseUrlInput = document.getElementById("settingsBaseUrl");
   const nativeLangSel = document.getElementById("settingsNativeLang");
+  const uiLangSel = document.getElementById("settingsUiLang");
+  const skipTransCheck = document.getElementById("settingsSkipTranslation");
   if (!dialog || !btn) return;
 
   const DEFAULTS = {
@@ -2696,11 +2956,11 @@ const Memo = (() => {
     if (!models.length) {
       const o = document.createElement("option");
       o.value = "__custom__";
-      o.textContent = "APIキーを入力するとモデル一覧を取得します";
+      o.textContent = I18n.t("settings.models_hint");
       modelSelect.appendChild(o);
       modelInput.hidden = false;
       modelInput.value = currentModel || "";
-      modelInput.placeholder = (DEFAULTS[provider] || {}).model || "モデルIDを入力";
+      modelInput.placeholder = (DEFAULTS[provider] || {}).model || I18n.t("settings.model_id_placeholder");
       return;
     }
     for (const m of models) {
@@ -2711,7 +2971,7 @@ const Memo = (() => {
     }
     const customOpt = document.createElement("option");
     customOpt.value = "__custom__";
-    customOpt.textContent = "カスタム…";
+    customOpt.textContent = I18n.t("settings.model_custom");
     modelSelect.appendChild(customOpt);
 
     const isPreset = models.includes(currentModel);
@@ -2754,19 +3014,19 @@ const Memo = (() => {
 
   function updateUI(provider, currentModel) {
     const d = DEFAULTS[provider] || DEFAULTS.gemini;
-    modelInput.placeholder = d.model || "モデル名を入力";
+    modelInput.placeholder = d.model || I18n.t("settings.model_name_placeholder");
     const showBaseUrl = provider === "openai" || provider === "custom";
     baseUrlLabel.hidden = !showBaseUrl;
     if (d.base_url) baseUrlInput.placeholder = d.base_url;
     const hint = document.getElementById("baseUrlHint");
     if (hint) {
       hint.hidden = provider !== "custom";
-      hint.textContent = provider === "custom" ? "例: http://localhost:1234（APIキーは空欄でもOK）" : "";
+      hint.textContent = provider === "custom" ? I18n.t("settings.base_url_hint") : "";
     }
     const keyLabel = keyInput.closest("label");
     if (keyLabel) {
       const req = provider !== "custom";
-      keyInput.placeholder = req ? (keyInput.placeholder || "未設定") : "不要なら空欄のままでOK";
+      keyInput.placeholder = req ? (keyInput.placeholder || I18n.t("settings.key_placeholder_unset")) : I18n.t("settings.key_not_required");
     }
     for (const [k, id] of Object.entries(HELP)) {
       const el = document.getElementById(id);
@@ -2793,6 +3053,8 @@ const Memo = (() => {
   let serverProvider = "";
   let serverModel = "";
   let serverNativeLang = "ja";
+  let serverUiLang = "ja";
+  let serverSkipTranslation = false;
 
   async function load() {
     try {
@@ -2802,11 +3064,15 @@ const Memo = (() => {
       serverProvider = s.provider || "";
       serverModel = s.model || "";
       serverNativeLang = s.native_language || "ja";
+      serverUiLang = s.ui_language || "ja";
+      serverSkipTranslation = !!s.skip_translation;
       providerSel.value = s.provider || "gemini";
       keyInput.value = "";
-      keyInput.placeholder = s.key_set ? "設定済み（変更する場合のみ入力）" : "未設定";
+      keyInput.placeholder = s.key_set ? I18n.t("settings.key_placeholder_set") : I18n.t("settings.key_placeholder_unset");
       baseUrlInput.value = s.base_url || "";
       if (nativeLangSel) nativeLangSel.value = serverNativeLang;
+      if (uiLangSel) uiLangSel.value = serverUiLang;
+      if (skipTransCheck) skipTransCheck.checked = serverSkipTranslation;
       updateUI(providerSel.value, serverModel);
       statusEl.textContent = "";
     } catch {}
@@ -2836,12 +3102,16 @@ const Memo = (() => {
     if ((pv === "openai" || pv === "custom") && bv) payload.base_url = bv;
     const nlv = nativeLangSel ? nativeLangSel.value : "";
     if (nlv && nlv !== serverNativeLang) payload.native_language = nlv;
+    const ulv = uiLangSel ? uiLangSel.value : "";
+    if (ulv && ulv !== serverUiLang) payload.ui_language = ulv;
+    const stv = skipTransCheck ? skipTransCheck.checked : false;
+    if (stv !== serverSkipTranslation) payload.skip_translation = stv;
     if (!Object.keys(payload).length) {
-      statusEl.textContent = "変更がありません";
+      statusEl.textContent = I18n.t("settings.no_changes");
       return;
     }
     saveBtn.disabled = true;
-    statusEl.textContent = "保存中…";
+    statusEl.textContent = I18n.t("settings.saving");
     try {
       const r = await fetch("/api/settings", {
         method: "PUT",
@@ -2851,10 +3121,14 @@ const Memo = (() => {
       if (!r.ok) throw new Error("HTTP " + r.status);
       const s = await r.json();
       serverProvider = s.provider || "";
+      if (s.ui_language && s.ui_language !== serverUiLang) {
+        serverUiLang = s.ui_language;
+        await I18n.load(serverUiLang);
+      }
       if (typeof Ask !== "undefined" && Ask.checkStatus) Ask.checkStatus();
       dialog.close();
     } catch (e) {
-      statusEl.textContent = "⚠️ 保存失敗: " + e.message;
+      statusEl.textContent = I18n.t("settings.save_failed", { msg: e.message });
     }
     saveBtn.disabled = false;
   };
@@ -2885,15 +3159,24 @@ const Memo = (() => {
       }
       const aiCheck = document.getElementById("settingsAiPanel");
       if (aiCheck) aiCheck.checked = true;
-      // 母国語をデフォルトに
+      // ダークモードをオフに
+      document.documentElement.dataset.theme = "";
+      localStorage.setItem("darkMode", "0");
+      const dmc = document.getElementById("settingsDarkMode");
+      if (dmc) dmc.checked = false;
+      // 母国語・UI言語・翻訳スキップをデフォルトに
       await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ native_language: "ja" }),
+        body: JSON.stringify({ native_language: "ja", ui_language: "ja", skip_translation: false }),
       }).catch(() => {});
+      if (serverUiLang !== "ja") {
+        serverUiLang = "ja";
+        await I18n.load("ja");
+      }
       // フォームをリロード
       load();
-      statusEl.textContent = "デフォルトに戻しました";
+      statusEl.textContent = I18n.t("settings.reset_done");
     };
   }
 
@@ -2973,6 +3256,21 @@ const Memo = (() => {
       if (r.ok) applyAll(await r.json());
     } catch {}
   })();
+})();
+
+/* ---------- i18n 初期化 ---------- */
+(async () => {
+  try {
+    const r = await fetch("/api/settings");
+    if (r.ok) {
+      const s = await r.json();
+      await I18n.init(s.ui_language || "ja");
+    }
+  } catch {
+    await I18n.init("ja");
+  }
+  if (typeof Ask !== "undefined" && Ask.checkStatus) Ask.checkStatus();
+  if (typeof ExplainMode !== "undefined") ExplainMode.update();
 })();
 
 /* ---------- ウェルカムガイド（初回のみ） ---------- */
