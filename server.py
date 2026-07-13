@@ -1,13 +1,18 @@
 """Naruhodo — AI が読み解く、次世代の論文リーダー。
 
-解説はローカルLLM（Ollama）、質問はクラウドLLM（Gemini/OpenAI/Claude）。
+解説はローカルLLM（Ollama）、質問はクラウドLLM（Gemini/OpenAI/Claude/Codex）。
 起動:  python server.py  または  uvicorn server:app --port 8432 --reload
 """
 
+import atexit
 import json
 import os
 import re
+import shutil
+import tempfile
+import threading
 import unicodedata
+import webbrowser
 from pathlib import Path
 
 import httpx
@@ -27,6 +32,14 @@ try:
     import anthropic as anthropic_mod
 except ImportError:  # noqa: BLE001
     anthropic_mod = None
+try:
+    import openai_codex as codex_sdk
+    from openai_codex.generated.v2_all import (
+        AgentMessageDeltaNotification as _CodexDelta,
+    )
+except ImportError:  # noqa: BLE001
+    codex_sdk = None
+    _CodexDelta = None
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -52,6 +65,7 @@ PROVIDER_DEFAULTS = {
     "gemini": {"model": "gemini-3.5-flash"},
     "openai": {"model": "gpt-5.4-mini", "base_url": "https://api.openai.com"},
     "anthropic": {"model": "claude-sonnet-4-6", "base_url": "https://api.anthropic.com"},
+    "codex": {"model": "gpt-5.5"},
     "custom": {"model": "", "base_url": "http://localhost:1234"},
 }
 
@@ -85,6 +99,11 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "claude-opus-4-6",
         "claude-sonnet-4-6",
         "claude-haiku-4-5",
+    ],
+    "codex": [
+        "gpt-5.5",
+        "gpt-5.4",
+        "gpt-5.4-mini",
     ],
 }
 
@@ -460,6 +479,73 @@ Answer the user's questions accurately and in detail, grounded in the paper's co
 """
 
 
+# Codex は APIキーではなく ChatGPT サブスクの OAuth 認証で動く。
+# `codex app-server` サブプロセスと JSON-RPC で通信する（配線は公式 SDK に任せる）。
+# クライアントは初回利用時に遅延起動し、プロセス終了時に閉じる。
+_codex_client = None
+_codex_lock = threading.Lock()
+_codex_workdir: str | None = None
+
+
+def _codex_bin() -> str | None:
+    p = os.environ.get("CODEX_BIN", "").strip()
+    if p and Path(p).is_file():
+        return p
+    p = shutil.which("codex")
+    if p:
+        return p
+    for cand in ("/opt/homebrew/bin/codex", "/usr/local/bin/codex"):
+        if Path(cand).is_file():
+            return cand
+    try:
+        from codex_cli_bin import bundled_codex_path
+        return str(bundled_codex_path())
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _get_codex():
+    global _codex_client, _codex_workdir
+    with _codex_lock:
+        if _codex_client is None:
+            bin_path = _codex_bin()
+            if not bin_path:
+                raise RuntimeError(_t("server.codex_not_found"))
+            # cwd は空ディレクトリにして、read-only サンドボックスでも
+            # ユーザーのファイルがモデルから見えないようにする。
+            _codex_workdir = tempfile.mkdtemp(prefix="naruhodo-codex-")
+            _codex_client = codex_sdk.Codex(codex_sdk.CodexConfig(
+                codex_bin=bin_path, client_name="naruhodo"))
+        return _codex_client
+
+
+def _close_codex() -> None:
+    global _codex_client
+    with _codex_lock:
+        if _codex_client is not None:
+            try:
+                _codex_client.close()
+            except Exception:  # noqa: BLE001
+                pass
+            _codex_client = None
+        if _codex_workdir:
+            shutil.rmtree(_codex_workdir, ignore_errors=True)
+
+
+atexit.register(_close_codex)
+
+
+def _codex_account():
+    """ログイン中のアカウント。未ログイン・エラー時は None。"""
+    if not codex_sdk or not _codex_bin():
+        return None
+    try:
+        acct = _get_codex().account().account
+        return getattr(acct, "root", acct) if acct else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def ask_status_info() -> dict:
     has_key = bool(ASK_API_KEY)
     provider = ASK_PROVIDER
@@ -467,10 +553,13 @@ def ask_status_info() -> dict:
         "gemini": bool(genai),
         "openai": bool(openai_mod),
         "anthropic": bool(anthropic_mod),
+        "codex": bool(codex_sdk),
         "custom": bool(openai_mod),
     }
     if provider == "custom":
         available = bool(ASK_BASE_URL) and sdk_ok.get(provider, False)
+    elif provider == "codex":
+        available = sdk_ok["codex"] and _codex_account() is not None
     else:
         available = has_key and bool(provider) and sdk_ok.get(provider, False)
     return {
@@ -610,9 +699,44 @@ def stream_custom(question: str, paper: str, selection: str | None,
             yield piece
 
 
+def stream_codex(question: str, paper: str, selection: str | None,
+                 history: list[dict] | None):
+    """ChatGPT サブスク認証の Codex。APIキー不要・履歴はプロンプトに畳み込む。"""
+    if not codex_sdk:
+        yield _t("server.pip_codex")
+        return
+    client = _get_codex()
+    parts = []
+    hist_lines = []
+    for h in history or []:
+        role = "アシスタント" if (h or {}).get("role") == "model" else "ユーザー"
+        text = _sanitize((h or {}).get("text", ""))
+        if text:
+            hist_lines.append(f"{role}: {text}")
+    if hist_lines:
+        parts.append("【これまでの会話】\n" + "\n\n".join(hist_lines))
+    parts.append(_build_question(question, selection))
+    # ASK_MODEL はプロバイダ間で共有なので、Codex のモデルでない値が
+    # 残っている場合は指定せず Codex 既定モデルに任せる。
+    model = ASK_MODEL if ASK_MODEL.startswith("gpt-") else None
+    thread = client.thread_start(
+        approval_mode=codex_sdk.ApprovalMode.deny_all,
+        sandbox=codex_sdk.Sandbox.read_only,
+        cwd=_codex_workdir,
+        ephemeral=True,
+        model=model,
+        base_instructions=_build_system(paper),
+    )
+    handle = thread.turn("\n\n".join(parts))
+    for ev in handle.stream():
+        if isinstance(ev.payload, _CodexDelta):
+            yield ev.payload.delta
+
+
 STREAM_FN = {
     "gemini": stream_gemini, "openai": stream_openai,
-    "anthropic": stream_anthropic, "custom": stream_custom,
+    "anthropic": stream_anthropic, "codex": stream_codex,
+    "custom": stream_custom,
 }
 
 
@@ -632,6 +756,18 @@ def _fetch_provider_models(provider: str, api_key: str = "",
             )
             resp = client.models.list()
             return sorted(m.id for m in resp) or None
+        except Exception:  # noqa: BLE001
+            return None
+    if provider == "codex":
+        # 未使用時に app-server サブプロセスを起動しない（起動時プリフェッチ対策）
+        if not codex_sdk or not _codex_bin():
+            return None
+        if _codex_client is None and ASK_PROVIDER != "codex":
+            return None
+        try:
+            resp = _get_codex().models()
+            models = [m.id for m in resp.data if not m.hidden]
+            return models or None
         except Exception:  # noqa: BLE001
             return None
     if not key:
@@ -932,6 +1068,64 @@ def get_provider_models(provider: str, body: ProviderModelsIn | None = None):
     if fetched is not None:
         return {"models": fetched, "source": "api"}
     return {"models": PROVIDER_MODELS.get(provider, []), "source": "preset"}
+
+
+_codex_login_handle = None
+
+
+def _codex_status_dict() -> dict:
+    installed = bool(codex_sdk) and bool(_codex_bin())
+    acct = _codex_account() if installed else None
+    info = {"installed": installed, "logged_in": acct is not None,
+            "email": "", "plan": ""}
+    if acct is not None:
+        info["email"] = getattr(acct, "email", "") or ""
+        plan = getattr(acct, "plan_type", None)
+        info["plan"] = getattr(plan, "value", "") if plan else ""
+    return info
+
+
+@app.get("/api/codex/status")
+def codex_status():
+    """codex CLI の有無と ChatGPT ログイン状態。設定画面で codex 選択時に呼ばれる。"""
+    return _codex_status_dict()
+
+
+@app.post("/api/codex/login")
+def codex_login():
+    global _codex_login_handle
+    if not codex_sdk:
+        raise HTTPException(400, _t("server.pip_codex"))
+    if not _codex_bin():
+        raise HTTPException(400, _t("server.codex_not_found"))
+    handle = _get_codex().login_chatgpt()
+    _codex_login_handle = handle
+    # wait() はブロックするのでバックグラウンドで完了を待つ。
+    # フロントは /api/codex/status をポーリングして logged_in を確認する。
+    threading.Thread(target=lambda: _swallow(handle.wait), daemon=True).start()
+    webbrowser.open(handle.auth_url)
+    return {"auth_url": handle.auth_url}
+
+
+def _swallow(fn) -> None:
+    try:
+        fn()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+@app.post("/api/codex/logout")
+def codex_logout():
+    global _codex_login_handle
+    if _codex_login_handle is not None:
+        _swallow(_codex_login_handle.cancel)
+        _codex_login_handle = None
+    if codex_sdk and _codex_bin():
+        try:
+            _get_codex().logout()
+        except Exception:  # noqa: BLE001
+            pass
+    return _codex_status_dict()
 
 
 class SettingsIn(BaseModel):

@@ -351,8 +351,10 @@ function applySpacing(z) {
   els.container.style.gap = GAP * z + "px";
 }
 
+let liveOffsetX = 0;
 function resetLive() {
   live = 1;
+  liveOffsetX = 0;
   els.container.style.transform = "";
   els.container.style.width = "";
   els.container.style.minWidth = "";
@@ -456,6 +458,9 @@ async function renderAll() {
   natW = els.container.scrollWidth;
   natH = els.container.scrollHeight;
   els.status.textContent = zoom !== 1 ? `${Math.round(zoom * 100)}%` : "";
+  if (typeof calcFitWidthZoom === "function") calcFitWidthZoom().then(() => {
+    if (typeof syncFitBtn === "function") syncFitBtn();
+  });
   return true;
 }
 
@@ -510,6 +515,7 @@ async function openPdfBuffer(buf, name, id) {
   live = 1;
   els.pdfPane.scrollTop = 0;
   if (typeof PageNav !== "undefined") PageNav.show(doc.numPages);
+  if (fitPageBtn) fitPageBtn.hidden = false;
   fetch("/api/last-pdf", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -581,24 +587,32 @@ function liveZoom(targetEff, cxv, cyv) {
   live = targetEff / zoom;
   const ratio = live / sOld;
 
+  const pane = els.pdfPane;
+  const scaledW = natW * live;
+  const oldOffX = liveOffsetX;
+  liveOffsetX = scaledW < pane.clientWidth ? (pane.clientWidth - scaledW) / 2 : 0;
+
   els.container.style.width = natW + "px";
   els.container.style.minWidth = "0";
-  els.container.style.transform = `scale(${live})`;
+  els.container.style.transform = liveOffsetX > 0
+    ? `translate(${liveOffsetX}px, 0) scale(${live})`
+    : `scale(${live})`;
   els.container.style.transformOrigin = "0 0";
   els.viewport.style.display = "block";
-  els.viewport.style.width = natW * live + "px";
+  els.viewport.style.width = Math.max(scaledW, pane.clientWidth) + "px";
   els.viewport.style.height = natH * live + "px";
 
-  const pane = els.pdfPane;
   const sl = pane.scrollLeft, st = pane.scrollTop;
-  const docX = sl + cxv, docY = st + cyv;
-  pane.scrollLeft = docX * ratio - cxv;
+  const docX = sl + cxv - oldOffX;
+  const docY = st + cyv;
+  pane.scrollLeft = docX * ratio - cxv + liveOffsetX;
   pane.scrollTop = docY * ratio - cyv;
   els.status.textContent = I18n.t("pdf.zoom", { pct: Math.round(targetEff * 100) });
 
   renderToken++; // 進行中の再描画を無効化
   clearTimeout(commitTimer);
   commitTimer = setTimeout(commitZoom, 200);
+  if (typeof syncFitBtn === "function") syncFitBtn();
 }
 
 async function commitZoom() {
@@ -634,13 +648,14 @@ async function commitZoom() {
   Bookmarks.renderMarkers();
   Finder.refresh();
   References.scan();
+  if (typeof syncFitBtn === "function") syncFitBtn();
 }
 
 els.pdfPane.addEventListener(
   "wheel",
   (e) => {
-    if (!pdfDoc || !(e.ctrlKey || e.metaKey)) return; // ピンチは ctrlKey で届く
-    e.preventDefault(); // ブラウザ全体ズームを抑止し PDF をズーム
+    if (!pdfDoc || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
     const r = els.pdfPane.getBoundingClientRect();
     const isWheel = Math.abs(e.deltaY) > 10;
     const factor = isWheel
@@ -664,6 +679,56 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "]") { e.preventDefault(); liveZoom(eff * 1.15, ...c); }
   else if (e.key === "[") { e.preventDefault(); liveZoom(eff / 1.15, ...c); }
 });
+
+/* ---------- ページフィット ---------- */
+const fitPageBtn = document.getElementById("fitPageBtn");
+let fitWidthZoom = 1;
+
+async function calcFitWidthZoom() {
+  if (!pdfDoc) return;
+  const paneW = els.pdfPane.clientWidth - 48;
+  const page = await pdfDoc.getPage(1);
+  const base = page.getViewport({ scale: 1 });
+  const bs = pageScale(page, paneW);
+  fitWidthZoom = paneW / (base.width * bs);
+}
+
+function syncFitBtn() {
+  if (!fitPageBtn) return;
+  const eff = zoom * live;
+  fitPageBtn.classList.toggle("active", Math.abs(eff - fitWidthZoom) < 0.02);
+}
+
+async function fitPage() {
+  if (!pdfDoc) return;
+  const pane = els.pdfPane;
+  const r = pane.getBoundingClientRect();
+  const c = [r.width / 2, r.height / 2];
+  const eff = zoom * live;
+
+  if (Math.abs(eff - fitWidthZoom) < 0.02) {
+    const paneW = pane.clientWidth;
+    const paneH = pane.clientHeight;
+    const curPage = PageNav ? PageNav.currentPage() : 1;
+    const page = await pdfDoc.getPage(curPage);
+    const base = page.getViewport({ scale: 1 });
+    const baseScale = pageScale(page, paneW - 48);
+    const renderedW = base.width * baseScale;
+    const renderedH = base.height * baseScale;
+    const fitW = (paneW - 48) / renderedW;
+    const fitH = (paneH - 48) / renderedH;
+    const target = clampZoom(Math.min(fitW, fitH));
+    liveZoom(target, ...c);
+    requestAnimationFrame(() => {
+      if (typeof PageNav !== "undefined") PageNav.jumpTo(curPage);
+    });
+  } else {
+    liveZoom(fitWidthZoom, ...c);
+  }
+}
+if (fitPageBtn) {
+  fitPageBtn.addEventListener("click", fitPage);
+}
 
 /* ---------- ページナビ ---------- */
 const PageNav = (() => {
@@ -1314,7 +1379,7 @@ const Ask = (() => {
       const r = await fetch("/api/ask-status");
       if (!r.ok) return;
       const s = await r.json();
-      const NAMES = { gemini: "Gemini", openai: "OpenAI", anthropic: "Claude", custom: I18n.t("ask.provider_custom") };
+      const NAMES = { gemini: "Gemini", openai: "OpenAI", anthropic: "Claude", codex: "Codex", custom: I18n.t("ask.provider_custom") };
       if (s.available) {
         setFormVisible(true);
         meta.textContent = I18n.t("ask.meta_label", { provider: NAMES[s.provider] || s.provider, model: s.model });
@@ -2946,9 +3011,10 @@ const Memo = (() => {
     gemini:    { model: "gemini-3.5-flash", base_url: "" },
     openai:    { model: "gpt-5.4-mini",           base_url: "https://api.openai.com" },
     anthropic: { model: "claude-sonnet-4-6", base_url: "" },
+    codex:     { model: "gpt-5.5",               base_url: "" },
     custom:    { model: "",                      base_url: "http://localhost:1234" },
   };
-  const HELP = { gemini: "helpGemini", openai: "helpOpenai", anthropic: "helpAnthropic", custom: "helpCustom" };
+  const HELP = { gemini: "helpGemini", openai: "helpOpenai", anthropic: "helpAnthropic", codex: "helpCodex", custom: "helpCustom" };
   let providerModels = {};
 
   function populateModels(models, provider, currentModel) {
@@ -3012,6 +3078,94 @@ const Memo = (() => {
     } catch {}
   }
 
+  /* ---- Codex: APIキーの代わりに ChatGPT サブスクの OAuth ログインを使う ---- */
+  const codexRow = document.getElementById("codexLoginRow");
+  const codexStatusEl = document.getElementById("codexLoginStatus");
+  const codexLoginBtn = document.getElementById("codexLoginBtn");
+  const codexLogoutBtn = document.getElementById("codexLogoutBtn");
+  let codexPollTimer = null;
+
+  function stopCodexPolling() {
+    clearInterval(codexPollTimer);
+    codexPollTimer = null;
+  }
+
+  function renderCodexStatus(s) {
+    if (!codexStatusEl) return;
+    if (!s.installed) {
+      codexStatusEl.textContent = I18n.t("settings.codex_not_installed");
+      codexLoginBtn.hidden = true;
+      codexLogoutBtn.hidden = true;
+    } else if (s.logged_in) {
+      codexStatusEl.textContent = I18n.t("settings.codex_logged_in", { email: s.email || "ChatGPT", plan: s.plan || "-" });
+      codexLoginBtn.hidden = true;
+      codexLogoutBtn.hidden = false;
+    } else {
+      codexStatusEl.textContent = I18n.t("settings.codex_not_logged_in");
+      codexLoginBtn.hidden = false;
+      codexLogoutBtn.hidden = true;
+    }
+  }
+
+  async function refreshCodexStatus() {
+    if (!codexStatusEl) return null;
+    codexStatusEl.textContent = I18n.t("settings.codex_checking");
+    codexLoginBtn.hidden = true;
+    codexLogoutBtn.hidden = true;
+    try {
+      const r = await fetch("/api/codex/status");
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const s = await r.json();
+      renderCodexStatus(s);
+      return s;
+    } catch {
+      codexStatusEl.textContent = I18n.t("settings.codex_status_failed");
+      return null;
+    }
+  }
+
+  if (codexLoginBtn) {
+    codexLoginBtn.onclick = async () => {
+      codexLoginBtn.disabled = true;
+      codexStatusEl.textContent = I18n.t("settings.codex_login_waiting");
+      try {
+        const r = await fetch("/api/codex/login", { method: "POST" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        // サーバー側が既定ブラウザで認証ページを開く。完了までポーリング。
+        stopCodexPolling();
+        let tries = 0;
+        codexPollTimer = setInterval(async () => {
+          tries += 1;
+          const s = await refreshCodexStatus();
+          if ((s && s.logged_in) || tries > 60) {
+            stopCodexPolling();
+            if (s && s.logged_in) {
+              fetchModels("codex", modelSelect.value === "__custom__" ? modelInput.value : modelSelect.value);
+              if (typeof Ask !== "undefined" && Ask.checkStatus) Ask.checkStatus();
+            }
+          } else {
+            codexStatusEl.textContent = I18n.t("settings.codex_login_waiting");
+          }
+        }, 2000);
+      } catch {
+        refreshCodexStatus();
+      }
+      codexLoginBtn.disabled = false;
+    };
+  }
+
+  if (codexLogoutBtn) {
+    codexLogoutBtn.onclick = async () => {
+      codexLogoutBtn.disabled = true;
+      try {
+        const r = await fetch("/api/codex/logout", { method: "POST" });
+        if (r.ok) renderCodexStatus(await r.json());
+        if (typeof Ask !== "undefined" && Ask.checkStatus) Ask.checkStatus();
+      } catch {}
+      codexLogoutBtn.disabled = false;
+    };
+  }
+
   function updateUI(provider, currentModel) {
     const d = DEFAULTS[provider] || DEFAULTS.gemini;
     modelInput.placeholder = d.model || I18n.t("settings.model_name_placeholder");
@@ -3025,8 +3179,14 @@ const Memo = (() => {
     }
     const keyLabel = keyInput.closest("label");
     if (keyLabel) {
+      keyLabel.hidden = provider === "codex";
       const req = provider !== "custom";
       keyInput.placeholder = req ? (keyInput.placeholder || I18n.t("settings.key_placeholder_unset")) : I18n.t("settings.key_not_required");
+    }
+    if (codexRow) {
+      codexRow.hidden = provider !== "codex";
+      if (provider === "codex") refreshCodexStatus();
+      else stopCodexPolling();
     }
     for (const [k, id] of Object.entries(HELP)) {
       const el = document.getElementById(id);
@@ -3089,6 +3249,7 @@ const Memo = (() => {
   dialog.addEventListener("click", (e) => {
     if (e.target === dialog) dialog.close();
   });
+  dialog.addEventListener("close", stopCodexPolling);
 
   saveBtn.onclick = async () => {
     const payload = {};

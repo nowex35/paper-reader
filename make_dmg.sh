@@ -215,6 +215,9 @@ if [ $? -ne 0 ]; then
   osascript -e 'display dialog "依存パッケージのインストールに失敗しました。\nログ: '"$LOG"'" buttons {"OK"} default button "OK" with title "Naruhodo"'
   exit 1
 fi
+# Codex SDK は依存の同梱バイナリ(約200MB)を避けて SDK のみ入れる。
+# codex バイナリはシステムにインストール済みのもの（brew install codex）を検出して使う。
+"$APPDATA/.venv/bin/pip" install -q --no-deps openai-codex >> "$LOG" 2>&1 || log "WARN: openai-codex install failed (質問機能の Codex プロバイダのみ影響)"
 
 log "Starting app..."
 SETUP

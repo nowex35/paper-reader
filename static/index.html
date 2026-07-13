@@ -147,13 +147,21 @@
             <option value="gemini">Google Gemini</option>
             <option value="openai">OpenAI</option>
             <option value="anthropic">Anthropic (Claude)</option>
+            <option value="codex">OpenAI Codex (ChatGPT)</option>
             <option value="custom" data-i18n="settings.custom_provider">カスタム (OpenAI互換)</option>
           </select>
         </label>
-        <label>
+        <label id="settingsApiKeyLabel">
           <span data-i18n="settings.api_key">API キー</span>
           <input id="settingsApiKey" type="password" data-i18n-placeholder="settings.key_placeholder_unset" placeholder="未設定" autocomplete="off" />
         </label>
+        <div id="codexLoginRow" hidden>
+          <p class="settings-desc"><span id="codexLoginStatus"></span></p>
+          <div class="codex-login-actions">
+            <button id="codexLoginBtn" type="button" class="codex-login-btn" data-i18n="settings.codex_login">ChatGPTでログイン</button>
+            <button id="codexLogoutBtn" type="button" class="codex-logout-btn" hidden data-i18n="settings.codex_logout">ログアウト</button>
+          </div>
+        </div>
         <label>
           <span data-i18n="settings.model_label">モデル</span>
           <select id="settingsModelSelect">
@@ -188,6 +196,14 @@
             <ol>
               <li><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic Console</a> を開く</li>
               <li>「Create Key」→ コピーして上の欄に貼り付け → 保存</li>
+            </ol>
+          </div>
+          <div id="helpCodex" hidden>
+            <p><strong>OpenAI Codex (ChatGPT)</strong></p>
+            <p>APIキーの代わりに ChatGPT アカウント（Plus/Pro など）でログインして使います。従量課金は発生せず、サブスクの利用枠を消費します。</p>
+            <ol>
+              <li><a href="https://developers.openai.com/codex/cli" target="_blank" rel="noopener">Codex CLI</a> をインストール（<code>brew install codex</code>）</li>
+              <li>上の「ChatGPTでログイン」→ ブラウザでログインを完了</li>
             </ol>
           </div>
           <div id="helpCustom" hidden>
@@ -245,6 +261,7 @@
     </section>
     <div id="memoResizer" class="col-resizer" role="separator" aria-orientation="vertical" aria-label="メモパネルの幅調整" hidden></div>
 
+    <div id="pdfArea">
     <div id="pdfPane" tabindex="-1" data-i18n-aria="pdf.viewer_aria" aria-label="PDFビューワー">
       <div id="pdfViewport">
         <div id="pdfContainer">
@@ -256,6 +273,8 @@
           </div>
         </div>
       </div>
+    </div>
+    <button id="fitPageBtn" class="pdf-float-btn" hidden data-i18n-title="pdf.fit_page_title" title="ページをビューワーにフィット"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
     </div>
     <div id="resizer" role="separator" aria-orientation="vertical" data-i18n-aria="pdf.resizer_aria" aria-label="AIパネルの幅調整"></div>
     <div id="sidePane" data-i18n-aria="ai.panel_aria" aria-label="AI解説・質問">
