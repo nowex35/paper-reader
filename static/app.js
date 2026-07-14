@@ -3226,7 +3226,7 @@ const Memo = (() => {
       serverNativeLang = s.native_language || "ja";
       serverUiLang = s.ui_language || "ja";
       serverSkipTranslation = !!s.skip_translation;
-      providerSel.value = s.provider || "gemini";
+      providerSel.value = s.provider || "codex";
       keyInput.value = "";
       keyInput.placeholder = s.key_set ? I18n.t("settings.key_placeholder_set") : I18n.t("settings.key_placeholder_unset");
       baseUrlInput.value = s.base_url || "";

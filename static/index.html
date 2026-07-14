@@ -84,70 +84,15 @@
     </div>
     <div class="settings-body">
       <section class="settings-section">
-        <h3 data-i18n="settings.font_size">文字サイズ</h3>
-        <label class="size-slider">
-          <span data-i18n="settings.memo_label">メモ</span> <span id="memoSizeVal">14</span>px
-          <input id="memoSizeRange" type="range" min="10" max="22" step="1" value="14" data-i18n-aria="settings.memo_size_aria" aria-label="メモの文字サイズ" />
-        </label>
-        <label class="size-slider">
-          <span data-i18n="settings.ai_label">AI 応答</span> <span id="aiSizeVal">14</span>px
-          <input id="aiSizeRange" type="range" min="10" max="22" step="1" value="14" data-i18n-aria="settings.ai_size_aria" aria-label="AI応答の文字サイズ" />
-        </label>
-        <label class="size-slider">
-          <span data-i18n="settings.ask_label">質問欄</span> <span id="askSizeVal">13.5</span>px
-          <input id="askSizeRange" type="range" min="10" max="22" step="0.5" value="13.5" data-i18n-aria="settings.ask_size_aria" aria-label="質問欄の文字サイズ" />
-        </label>
-      </section>
-      <section class="settings-section">
-        <h3 data-i18n="settings.panel_display">パネル表示</h3>
-        <label class="settings-toggle">
-          <input id="settingsAiPanel" type="checkbox" checked />
-          <span data-i18n="settings.show_ai_panel">AIパネルを表示</span> <span class="muted">⌘L</span>
-        </label>
-        <label class="settings-toggle">
-          <span class="toggle-wrap"><input id="settingsDarkMode" type="checkbox" /><span class="toggle-track"></span></span>
-          <span data-i18n="settings.dark_mode">ダークモード</span>
-        </label>
-      </section>
-      <section class="settings-section">
-        <h3 data-i18n="settings.ui_language">UI言語</h3>
-        <p class="settings-desc" data-i18n="settings.ui_language_desc">アプリの表示言語を切り替えます。解説の言語は「母国語」設定で別途変更できます。</p>
-        <label>
-          <select id="settingsUiLang">
-            <option value="ja">日本語</option>
-            <option value="en">English</option>
-            <option value="zh">中文</option>
-            <option value="ko">한국어</option>
-          </select>
-        </label>
-      </section>
-      <section class="settings-section">
-        <h3 data-i18n="settings.native_language">母国語</h3>
-        <p class="settings-desc" data-i18n="settings.native_language_desc">母国語を選択すると、その言語で解説が生成されます。論文と同じ言語の場合、翻訳セクションは省略されます。</p>
-        <label>
-          <select id="settingsNativeLang">
-            <option value="ja">日本語</option>
-            <option value="en">English</option>
-            <option value="zh">中文</option>
-            <option value="ko">한국어</option>
-          </select>
-        </label>
-        <label class="settings-toggle">
-          <input id="settingsSkipTranslation" type="checkbox" />
-          <span data-i18n="settings.skip_translation">翻訳セクションを省略</span>
-        </label>
-        <p class="settings-desc" data-i18n="settings.skip_translation_desc">原文が読める場合、解説から翻訳セクションを省き、用語解説と要約のみ表示します。</p>
-      </section>
-      <section class="settings-section">
         <h3 data-i18n="settings.ask_feature">質問機能</h3>
         <p class="settings-desc" data-i18n="settings.ask_feature_desc">クラウドLLMのAPIキーを設定すると、論文全文を踏まえた質問ができるようになります。翻訳・解説は設定なしで使えます。</p>
         <label>
           <span data-i18n="settings.provider">プロバイダ</span>
           <select id="settingsProvider">
+            <option value="codex">OpenAI Codex (ChatGPT)</option>
             <option value="gemini">Google Gemini</option>
             <option value="openai">OpenAI</option>
             <option value="anthropic">Anthropic (Claude)</option>
-            <option value="codex">OpenAI Codex (ChatGPT)</option>
             <option value="custom" data-i18n="settings.custom_provider">カスタム (OpenAI互換)</option>
           </select>
         </label>
@@ -217,6 +162,61 @@
           </div>
           <p data-i18n="settings.key_privacy">キーはこの Mac 内にのみ保存され、選択したプロバイダの API への通信にのみ使用されます。</p>
         </details>
+      </section>
+      <section class="settings-section">
+        <h3 data-i18n="settings.font_size">文字サイズ</h3>
+        <label class="size-slider">
+          <span data-i18n="settings.memo_label">メモ</span> <span id="memoSizeVal">14</span>px
+          <input id="memoSizeRange" type="range" min="10" max="22" step="1" value="14" data-i18n-aria="settings.memo_size_aria" aria-label="メモの文字サイズ" />
+        </label>
+        <label class="size-slider">
+          <span data-i18n="settings.ai_label">AI 応答</span> <span id="aiSizeVal">14</span>px
+          <input id="aiSizeRange" type="range" min="10" max="22" step="1" value="14" data-i18n-aria="settings.ai_size_aria" aria-label="AI応答の文字サイズ" />
+        </label>
+        <label class="size-slider">
+          <span data-i18n="settings.ask_label">質問欄</span> <span id="askSizeVal">13.5</span>px
+          <input id="askSizeRange" type="range" min="10" max="22" step="0.5" value="13.5" data-i18n-aria="settings.ask_size_aria" aria-label="質問欄の文字サイズ" />
+        </label>
+      </section>
+      <section class="settings-section">
+        <h3 data-i18n="settings.panel_display">パネル表示</h3>
+        <label class="settings-toggle">
+          <input id="settingsAiPanel" type="checkbox" checked />
+          <span data-i18n="settings.show_ai_panel">AIパネルを表示</span> <span class="muted">⌘L</span>
+        </label>
+        <label class="settings-toggle">
+          <span class="toggle-wrap"><input id="settingsDarkMode" type="checkbox" /><span class="toggle-track"></span></span>
+          <span data-i18n="settings.dark_mode">ダークモード</span>
+        </label>
+      </section>
+      <section class="settings-section">
+        <h3 data-i18n="settings.ui_language">UI言語</h3>
+        <p class="settings-desc" data-i18n="settings.ui_language_desc">アプリの表示言語を切り替えます。解説の言語は「母国語」設定で別途変更できます。</p>
+        <label>
+          <select id="settingsUiLang">
+            <option value="ja">日本語</option>
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+            <option value="ko">한국어</option>
+          </select>
+        </label>
+      </section>
+      <section class="settings-section">
+        <h3 data-i18n="settings.native_language">母国語</h3>
+        <p class="settings-desc" data-i18n="settings.native_language_desc">母国語を選択すると、その言語で解説が生成されます。論文と同じ言語の場合、翻訳セクションは省略されます。</p>
+        <label>
+          <select id="settingsNativeLang">
+            <option value="ja">日本語</option>
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+            <option value="ko">한국어</option>
+          </select>
+        </label>
+        <label class="settings-toggle">
+          <input id="settingsSkipTranslation" type="checkbox" />
+          <span data-i18n="settings.skip_translation">翻訳セクションを省略</span>
+        </label>
+        <p class="settings-desc" data-i18n="settings.skip_translation_desc">原文が読める場合、解説から翻訳セクションを省き、用語解説と要約のみ表示します。</p>
       </section>
     </div>
     <div class="settings-foot">

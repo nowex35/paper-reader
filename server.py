@@ -57,9 +57,10 @@ OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:4b").strip()
 # プロバイダ・APIキーを設定すれば質問欄が有効になる。
 _legacy_key = os.environ.get("GEMINI_API_KEY", "").strip()
 _legacy_model = os.environ.get("GEMINI_MODEL", "").strip()
-ASK_PROVIDER = os.environ.get("ASK_PROVIDER", "").strip() or ("gemini" if _legacy_key else "")
+ASK_PROVIDER = os.environ.get("ASK_PROVIDER", "").strip() or ("gemini" if _legacy_key else "codex")
 ASK_API_KEY = os.environ.get("ASK_API_KEY", "").strip() or _legacy_key
-ASK_MODEL = os.environ.get("ASK_MODEL", "").strip() or _legacy_model or "gemini-3.5-flash"
+ASK_MODEL = (os.environ.get("ASK_MODEL", "").strip() or _legacy_model
+             or ("gpt-5.6-sol" if ASK_PROVIDER == "codex" else "gemini-3.5-flash"))
 ASK_BASE_URL = os.environ.get("ASK_BASE_URL", "").strip()
 
 PROVIDER_DEFAULTS = {
