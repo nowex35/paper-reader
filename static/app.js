@@ -3011,7 +3011,7 @@ const Memo = (() => {
     gemini:    { model: "gemini-3.5-flash", base_url: "" },
     openai:    { model: "gpt-5.4-mini",           base_url: "https://api.openai.com" },
     anthropic: { model: "claude-sonnet-4-6", base_url: "" },
-    codex:     { model: "gpt-5.5",               base_url: "" },
+    codex:     { model: "gpt-5.6-sol",           base_url: "" },
     custom:    { model: "",                      base_url: "http://localhost:1234" },
   };
   const HELP = { gemini: "helpGemini", openai: "helpOpenai", anthropic: "helpAnthropic", codex: "helpCodex", custom: "helpCustom" };

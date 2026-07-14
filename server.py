@@ -66,7 +66,7 @@ PROVIDER_DEFAULTS = {
     "gemini": {"model": "gemini-3.5-flash"},
     "openai": {"model": "gpt-5.4-mini", "base_url": "https://api.openai.com"},
     "anthropic": {"model": "claude-sonnet-4-6", "base_url": "https://api.anthropic.com"},
-    "codex": {"model": "gpt-5.5"},
+    "codex": {"model": "gpt-5.6-sol"},
     "custom": {"model": "", "base_url": "http://localhost:1234"},
 }
 
@@ -102,6 +102,9 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "claude-haiku-4-5",
     ],
     "codex": [
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
         "gpt-5.5",
         "gpt-5.4",
         "gpt-5.4-mini",
@@ -783,8 +786,11 @@ def _fetch_provider_models(provider: str, api_key: str = "",
         if _codex_client is None and ASK_PROVIDER != "codex":
             return None
         try:
-            resp = _get_codex().models()
-            models = [m.id for m in resp.data if not m.hidden]
+            # SDK(0.1.0b3) の pydantic 型は新しい codex が返す reasoningEffort 値
+            # （max/ultra）で検証エラーになるため、生 JSON-RPC で取得する
+            raw = _get_codex()._client._request_raw(
+                "model/list", {"includeHidden": False})
+            models = [m["id"] for m in raw.get("data", []) if not m.get("hidden")]
             return models or None
         except Exception:  # noqa: BLE001
             return None
