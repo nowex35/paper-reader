@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import threading
 import unicodedata
@@ -504,6 +505,22 @@ def _codex_bin() -> str | None:
         return None
 
 
+def _codex_env() -> dict[str, str]:
+    """codex 起動用の環境変数。GUI アプリ起動時は PATH が最小構成のため、
+    npm 版 codex（node シム）が node を見つけられるようログインシェルの PATH を足す。"""
+    env = dict(os.environ)
+    extra = "/opt/homebrew/bin:/usr/local/bin"
+    try:
+        out = subprocess.run(["/bin/zsh", "-lc", "printf %s \"$PATH\""],
+                             capture_output=True, text=True, timeout=5)
+        if out.returncode == 0 and out.stdout.strip():
+            extra = out.stdout.strip()
+    except Exception:  # noqa: BLE001
+        pass
+    env["PATH"] = extra + ":" + env.get("PATH", "")
+    return env
+
+
 def _get_codex():
     global _codex_client, _codex_workdir
     with _codex_lock:
@@ -515,7 +532,8 @@ def _get_codex():
             # ユーザーのファイルがモデルから見えないようにする。
             _codex_workdir = tempfile.mkdtemp(prefix="naruhodo-codex-")
             _codex_client = codex_sdk.Codex(codex_sdk.CodexConfig(
-                codex_bin=bin_path, client_name="naruhodo"))
+                codex_bin=bin_path, client_name="naruhodo",
+                env=_codex_env()))
         return _codex_client
 
 

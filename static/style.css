@@ -883,7 +883,7 @@ button:hover { background: var(--bg-hover); }
   font-size: 12.5px;
   cursor: pointer;
 }
-.codex-login-btn:hover { filter: brightness(1.08); }
+.codex-login-btn:hover { background: #3d82ff; }
 .codex-login-btn:disabled { opacity: 0.6; cursor: default; }
 .codex-logout-btn {
   background: none;
