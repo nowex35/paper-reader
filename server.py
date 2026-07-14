@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import unicodedata
@@ -510,9 +511,12 @@ def _codex_bin() -> str | None:
 
 
 def _codex_env() -> dict[str, str]:
-    """codex 起動用の環境変数。GUI アプリ起動時は PATH が最小構成のため、
-    npm 版 codex（node シム）が node を見つけられるようログインシェルの PATH を足す。"""
+    """codex 起動用の環境変数。macOS の GUI アプリ起動時は PATH が最小構成のため、
+    npm 版 codex（node シム）が node を見つけられるようログインシェルの PATH を足す。
+    Windows は GUI でもユーザーの PATH を引き継ぐのでそのまま返す。"""
     env = dict(os.environ)
+    if sys.platform != "darwin":
+        return env
     extra = "/opt/homebrew/bin:/usr/local/bin"
     try:
         out = subprocess.run(["/bin/zsh", "-lc", "printf %s \"$PATH\""],

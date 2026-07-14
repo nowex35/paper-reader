@@ -13,6 +13,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -139,14 +140,34 @@ def _ollama_up() -> bool:
         return False
 
 
+def _win_ollama_app() -> str:
+    return os.path.join(os.environ.get("LOCALAPPDATA", ""),
+                        "Programs", "Ollama", "ollama app.exe")
+
+
 def _ollama_installed() -> bool:
-    return (
-        shutil.which("ollama") is not None
-        or os.path.isdir("/Applications/Ollama.app")
-    )
+    if shutil.which("ollama") is not None:
+        return True
+    if sys.platform == "darwin":
+        return os.path.isdir("/Applications/Ollama.app")
+    if sys.platform == "win32":
+        return os.path.isfile(_win_ollama_app())
+    return False
 
 
 def _install_ollama() -> bool:
+    if sys.platform == "win32":
+        if not shutil.which("winget"):
+            return False
+        try:
+            print("[naruhodo] Installing Ollama via winget...")
+            subprocess.run(["winget", "install", "-e", "--id", "Ollama.Ollama",
+                            "--silent", "--accept-package-agreements",
+                            "--accept-source-agreements"],
+                           check=True, capture_output=True, timeout=600)
+            return True
+        except Exception:  # noqa: BLE001
+            return False
     if not shutil.which("brew"):
         return False
     try:
@@ -284,8 +305,10 @@ def _boot(window) -> None:
     if not _ollama_up():
         _update_loading(window, _dt("desktop.starting_ollama"), 20)
         try:
-            if os.path.isdir("/Applications/Ollama.app"):
+            if sys.platform == "darwin" and os.path.isdir("/Applications/Ollama.app"):
                 subprocess.Popen(["open", "-a", "Ollama"])
+            elif sys.platform == "win32" and os.path.isfile(_win_ollama_app()):
+                subprocess.Popen([_win_ollama_app()])
             elif shutil.which("ollama"):
                 global _ollama_proc
                 _ollama_proc = subprocess.Popen(
@@ -361,7 +384,7 @@ def _cleanup_ollama() -> None:
                 _ollama_proc.terminate()
                 _ollama_proc.wait(timeout=5)
                 print("[naruhodo] stopped ollama serve")
-            else:
+            elif sys.platform == "darwin":
                 subprocess.run(["osascript", "-e",
                                 'tell application "Ollama" to quit'],
                                timeout=5, capture_output=True)

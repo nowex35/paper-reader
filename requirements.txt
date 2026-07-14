@@ -4,6 +4,7 @@ httpx>=0.27
 python-dotenv>=1.0
 pydantic>=2.6
 pywebview>=6.0
+pythonnet>=3.0; sys_platform == "win32"  # pywebview の Windows バックエンド(WebView2)に必要
 google-genai>=1.0   # 質問機能(Gemini)用。翻訳のみなら無くても動く
 openai>=1.0         # 質問機能(OpenAI)用
 anthropic>=0.30     # 質問機能(Claude)用

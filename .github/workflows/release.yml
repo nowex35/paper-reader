@@ -56,6 +56,9 @@ jobs:
           SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
         run: bash make_dmg.sh
 
+      - name: Build Windows zip
+        run: bash windows/build_windows_zip.sh
+
       - name: Sign update with Sparkle EdDSA
         if: env.SPARKLE_EDDSA_KEY != ''
         env:
@@ -97,6 +100,9 @@ jobs:
           gh release upload "$TAG" Naruhodo.dmg --clobber
           if [ -f Naruhodo.zip ]; then
             gh release upload "$TAG" Naruhodo.zip --clobber
+          fi
+          if [ -f Naruhodo-Windows.zip ]; then
+            gh release upload "$TAG" Naruhodo-Windows.zip --clobber
           fi
           gh release edit "$TAG" --draft=false
 
