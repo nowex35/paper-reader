@@ -738,6 +738,7 @@ button:hover { background: var(--bg-hover); }
   padding: 0 4px;
 }
 .settings-body { padding: 18px; }
+.settings-section + .settings-section { margin-top: 32px; }
 .settings-section h3 {
   font-size: 14px;
   margin: 0 0 6px;
