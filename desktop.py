@@ -155,6 +155,28 @@ def _ollama_installed() -> bool:
     return False
 
 
+def _install_ollama_from_zip() -> bool:
+    """brew がない macOS 向け: 公式 zip を直接取得して /Applications に配置する。"""
+    import tempfile
+    import zipfile
+    try:
+        print("[naruhodo] Downloading Ollama.app (Homebrew not found)...")
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = os.path.join(tmp, "Ollama-darwin.zip")
+            urllib.request.urlretrieve(
+                "https://ollama.com/download/Ollama-darwin.zip", zip_path)
+            with zipfile.ZipFile(zip_path) as zf:
+                zf.extractall(tmp)
+            dest = "/Applications/Ollama.app"
+            if os.path.isdir(dest):
+                shutil.rmtree(dest)
+            shutil.move(os.path.join(tmp, "Ollama.app"), dest)
+        return True
+    except Exception as e:  # noqa: BLE001
+        print(f"[naruhodo] Ollama zip install failed: {e}")
+        return False
+
+
 def _install_ollama() -> bool:
     if sys.platform == "win32":
         if not shutil.which("winget"):
@@ -168,15 +190,17 @@ def _install_ollama() -> bool:
             return True
         except Exception:  # noqa: BLE001
             return False
-    if not shutil.which("brew"):
-        return False
-    try:
-        print("[naruhodo] Installing Ollama via Homebrew...")
-        subprocess.run(["brew", "install", "ollama"], check=True,
-                        capture_output=True, timeout=300)
-        return True
-    except Exception:  # noqa: BLE001
-        return False
+    if shutil.which("brew"):
+        try:
+            print("[naruhodo] Installing Ollama via Homebrew...")
+            subprocess.run(["brew", "install", "ollama"], check=True,
+                            capture_output=True, timeout=300)
+            return True
+        except Exception:  # noqa: BLE001
+            pass
+    if sys.platform == "darwin":
+        return _install_ollama_from_zip()
+    return False
 
 
 def _current_model() -> str:

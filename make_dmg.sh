@@ -157,14 +157,25 @@ ollama_ready() {
   curl -sf http://localhost:11434/api/version &>/dev/null
 }
 
+install_ollama_from_zip() {
+  log "Downloading Ollama.app (Homebrew not found)..."
+  local tmp
+  tmp="$(mktemp -d)"
+  if curl -fsSL -o "$tmp/Ollama-darwin.zip" https://ollama.com/download/Ollama-darwin.zip >> "$LOG" 2>&1; then
+    if ditto -x -k "$tmp/Ollama-darwin.zip" "$tmp" >> "$LOG" 2>&1 && [ -d "$tmp/Ollama.app" ]; then
+      rm -rf "/Applications/Ollama.app"
+      mv "$tmp/Ollama.app" /Applications/ >> "$LOG" 2>&1
+    fi
+  fi
+  rm -rf "$tmp"
+}
+
 if ! command -v ollama &>/dev/null && [ ! -d "/Applications/Ollama.app" ]; then
   if command -v brew &>/dev/null; then
     log "Installing Ollama via brew..."
     brew install ollama >> "$LOG" 2>&1
   else
-    osascript -e 'display dialog "Naruhodo を使うには Ollama が必要です。\n\nhttps://ollama.com/download\n\nからインストールして、もう一度起動してください。" buttons {"OK"} default button "OK" with title "Naruhodo"'
-    open "https://ollama.com/download"
-    exit 0
+    install_ollama_from_zip
   fi
 fi
 
