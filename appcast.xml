@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Naruhodo</title>
+    <item>
+      <title>Version 1.4.5</title>
+      <sparkle:version>80</sparkle:version>
+      <sparkle:shortVersionString>1.4.5</sparkle:shortVersionString>
+      <pubDate>Thu, 23 Jul 2026 08:04:11 +0000</pubDate>
+      <description><![CDATA[<ul><li>v1.4.5: Ollamaのインストールをより快適に</li>
+<li>Homebrew が入っていない環境でも、確認ダイアログを出さずに Ollama を自動でインストールできるようになりました</li></ul>]]></description>
+      <enclosure url="https://github.com/nowex35/paper-reader/releases/download/v1.4.5/Naruhodo.zip"
+       sparkle:edSignature="dRIgflNVwz+BpZTt5qK/8MCqHHP7mtAua6WgSAPyggpd6XydtZzeCUv0GCpahzar8HTtQ2y+joKjcjqANPWUDw=="
+       length="4326678"
+       type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>
