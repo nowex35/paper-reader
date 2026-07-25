@@ -1,7 +1,12 @@
 #!/bin/bash
 # Naruhodo.dmg を生成する。
 # ユーザーは DMG を開いて .app を /Applications にドラッグするだけ。
-# 初回起動時に Python venv 構築・Ollama セットアップ・モデル pull が自動で走る。
+# Python ランタイム・依存パッケージ・Ollama をすべてバンドルに同梱するため、
+# ユーザーは何も別途インストールしなくてよい（管理者パスワードも不要）。
+# 初回起動時に走るのはモデルの pull のみ（アプリ内に進捗バーが出る）。
+#
+# Apple Silicon 専用。pydantic-core / jiter / cffi 等の wheel が arm64 単一で
+# universal2 バンドルを作れないため、Intel Mac は対象外。
 #
 # ── 署名 & 公証（Gatekeeper 警告なし配布）──
 #
@@ -37,6 +42,14 @@ VERSION="${VERSION:-$(git -C "$SRCDIR" describe --tags --abbrev=0 2>/dev/null | 
 BUILD="${BUILD:-$(git -C "$SRCDIR" rev-list HEAD --count 2>/dev/null || echo '1')}"
 SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-}"
 
+# 同梱する Python ランタイム（python-build-standalone / Apple Silicon 専用）
+PBS_RELEASE="20260718"
+PBS_PYTHON="3.14.6"
+PY_MINOR="${PBS_PYTHON%.*}"
+
+# 同梱する Ollama のバージョン（更新時はここだけ変える）
+OLLAMA_VERSION="0.30.11"
+
 echo "📦 Naruhodo.app をパッケージング中…"
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/app"
@@ -57,6 +70,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
+  <key>LSRequiresNativeExecution</key><true/>
+  <key>LSArchitecturePriority</key>
+  <array><string>arm64</string></array>
 </dict>
 </plist>
 PLIST
@@ -91,6 +107,71 @@ mkdir -p "$APP/Contents/Resources/app/bookmarks"
 mkdir -p "$APP/Contents/Resources/app/conversations"
 mkdir -p "$APP/Contents/Resources/app/pdfs"
 
+# ---- Python ランタイムを同梱 ----
+# ユーザー環境の python3 / pip に依存せず、初回起動時のセットアップも不要にする。
+# python-build-standalone は再配置可能なので、そのまま Resources に置けば動く。
+PYROOT="$APP/Contents/Resources/python"
+PBS_URL="https://github.com/astral-sh/python-build-standalone/releases/download/$PBS_RELEASE/cpython-$PBS_PYTHON+$PBS_RELEASE-aarch64-apple-darwin-install_only.tar.gz"
+
+echo "🐍 Python $PBS_PYTHON を同梱中…"
+mkdir -p "$APP/Contents/Resources"
+curl -fsSL "$PBS_URL" | tar xz -C "$APP/Contents/Resources"
+
+echo "📚 依存パッケージをインストール中…"
+"$PYROOT/bin/python3" -m pip install -q -r "$SRCDIR/requirements.txt"
+# Codex SDK は依存の同梱バイナリ(約200MB)を避けて SDK のみ入れる。
+# codex バイナリはシステムにインストール済みのもの（brew install codex）を検出して使う。
+"$PYROOT/bin/python3" -m pip install -q --no-deps openai-codex \
+  || echo "   ⚠️  openai-codex のインストールに失敗（質問機能の Codex プロバイダのみ影響）"
+
+echo "✂️  未使用ファイルを削除中…"
+PYLIB="$PYROOT/lib/python$PY_MINOR"
+rm -rf "$PYLIB/site-packages/PyObjCTest" "$PYLIB/site-packages/pip" "$PYLIB/site-packages"/pip-*.dist-info
+rm -rf "$PYLIB/idlelib" "$PYLIB/tkinter" "$PYLIB/turtledemo" "$PYLIB/ensurepip" "$PYLIB/pydoc_data"
+rm -rf "$PYROOT/include" "$PYROOT/share"
+rm -rf "$PYROOT/lib/tcl"* "$PYROOT/lib/tk"* "$PYROOT/lib/itcl"* "$PYROOT/lib/thread"* "$PYROOT/lib/pkgconfig"
+rm -f "$PYROOT"/lib/libtcl*.dylib "$PYROOT"/lib/libtk*.dylib "$PYROOT"/lib/*.a
+find "$PYLIB" -name "_tkinter*.so" -delete
+
+# universal2 の wheel を arm64 のみに薄くする（Apple Silicon 専用ビルドのため）
+find "$PYROOT" \( -name "*.so" -o -name "*.dylib" \) -print0 | while IFS= read -r -d '' f; do
+  case "$(lipo -archs "$f" 2>/dev/null)" in
+    *x86_64*) lipo -thin arm64 "$f" -output "$f.thin" 2>/dev/null && mv "$f.thin" "$f" ;;
+  esac
+done
+
+# 同梱 Python が正しく動くか検証（壊れたバンドルを配らないため）
+"$PYROOT/bin/python3" -c "import webview, fastapi, uvicorn, httpx, dotenv, pydantic, openai, anthropic; from google import genai" \
+  || { echo "❌ 同梱 Python の import 検証に失敗しました"; exit 1; }
+echo "   同梱 Python: $(du -sh "$PYROOT" | cut -f1)"
+
+# ---- Ollama を同梱 ----
+# ユーザーに Ollama を別途インストールさせない（/Applications への書き込みも
+# 管理者パスワードも不要になる）。Apple Silicon では ollama と llama-server の
+# 2バイナリだけで Metal 推論が動く。同梱の dylib 群は x86_64 専用なので入れない。
+OLLAMADIR="$APP/Contents/Resources/ollama"
+OLLAMA_TGZ="https://github.com/ollama/ollama/releases/download/v$OLLAMA_VERSION/ollama-darwin.tgz"
+
+echo "🦙 Ollama $OLLAMA_VERSION を同梱中…"
+OLLAMA_WORK="$WORK/ollama-dist"
+mkdir -p "$OLLAMA_WORK" "$OLLAMADIR"
+curl -fsSL "$OLLAMA_TGZ" | tar xz -C "$OLLAMA_WORK"
+for f in ollama llama-server; do
+  # 公式が将来 arm64 単一配布になっても壊れないように、fat のときだけ thin する
+  case "$(lipo -archs "$OLLAMA_WORK/$f")" in
+    *x86_64*) lipo -thin arm64 "$OLLAMA_WORK/$f" -output "$OLLAMADIR/$f" ;;
+    *)        cp "$OLLAMA_WORK/$f" "$OLLAMADIR/$f" ;;
+  esac
+  chmod +x "$OLLAMADIR/$f"
+done
+rm -rf "$OLLAMA_WORK"
+
+# MIT ライセンスの表示を同梱する（再配布の条件）
+curl -fsSL -o "$OLLAMADIR/LICENSE" \
+  "https://raw.githubusercontent.com/ollama/ollama/v$OLLAMA_VERSION/LICENSE" \
+  || { echo "❌ Ollama の LICENSE を取得できませんでした"; exit 1; }
+echo "   同梱 Ollama: $(du -sh "$OLLAMADIR" | cut -f1)"
+
 # ---- Sparkle.framework（自動アップデート） ----
 if [ -n "$SPARKLE_PUBLIC_KEY" ]; then
   SPARKLE_VER="2.9.3"
@@ -115,7 +196,7 @@ fi
 # ---- ネイティブランチャ（Sparkle XPC 署名検証のため） ----
 echo "🔨 ネイティブランチャをコンパイル中…"
 cc -o "$APP/Contents/MacOS/naruhodo" \
-   -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 \
+   -arch arm64 -mmacosx-version-min=11.0 \
    "$SRCDIR/launcher.c"
 
 # ---- セットアップスクリプト（ネイティブランチャから呼ばれる） ----
@@ -150,85 +231,24 @@ if [ -f "$RESOURCES/app/.env.example" ] && [ ! -f "$APPDATA/.env" ]; then
   cp "$RESOURCES/app/.env.example" "$APPDATA/.env"
 fi
 
+# 旧バージョンの .env には既定値の OLLAMA_HOST が書かれている。そのままだと
+# 「ユーザーが接続先を明示した」と解釈され同梱 Ollama が使われないので外す。
+# 自分で別の接続先を書いた人の設定は触らない。
+if [ -f "$APPDATA/.env" ]; then
+  sed -i '' -E 's|^OLLAMA_HOST=http://localhost:11434/?$|# &|' "$APPDATA/.env"
+fi
+
 cd "$APPDATA" || exit 1
 
-# ---- Ollama 確認・インストール ----
-ollama_ready() {
-  curl -sf http://localhost:11434/api/version &>/dev/null
-}
+# Ollama は同梱されており、desktop.py が進捗表示付きで起動する。
+# ここでインストールや起動は行わない（/Applications への書き込みも不要）。
 
-install_ollama_from_zip() {
-  log "Downloading Ollama.app (Homebrew not found)..."
-  local tmp
-  tmp="$(mktemp -d)"
-  if curl -fsSL -o "$tmp/Ollama-darwin.zip" https://ollama.com/download/Ollama-darwin.zip >> "$LOG" 2>&1; then
-    if ditto -x -k "$tmp/Ollama-darwin.zip" "$tmp" >> "$LOG" 2>&1 && [ -d "$tmp/Ollama.app" ]; then
-      rm -rf "/Applications/Ollama.app"
-      mv "$tmp/Ollama.app" /Applications/ >> "$LOG" 2>&1
-    fi
-  fi
-  rm -rf "$tmp"
-}
-
-if ! command -v ollama &>/dev/null && [ ! -d "/Applications/Ollama.app" ]; then
-  if command -v brew &>/dev/null; then
-    log "Installing Ollama via brew..."
-    brew install ollama >> "$LOG" 2>&1
-  else
-    install_ollama_from_zip
-  fi
+# Python ランタイムと依存パッケージはバンドルに同梱済み。
+# 旧バージョンが作った venv が残っていれば掃除する（もう使わない）。
+if [ -d "$APPDATA/.venv" ]; then
+  log "Removing obsolete venv..."
+  rm -rf "$APPDATA/.venv"
 fi
-
-# ---- Ollama 起動 ----
-if ! ollama_ready; then
-  log "Starting Ollama..."
-  if [ -d "/Applications/Ollama.app" ]; then
-    open -a Ollama
-  elif command -v ollama &>/dev/null; then
-    ollama serve >> "$LOG" 2>&1 &
-  fi
-  for i in $(seq 1 30); do
-    ollama_ready && break
-    sleep 1
-  done
-fi
-
-# ---- Python を探す ----
-PYTHON=""
-for p in python3 /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
-  if command -v "$p" &>/dev/null; then
-    PYTHON="$p"
-    break
-  fi
-done
-if [ -z "$PYTHON" ]; then
-  log "ERROR: python3 not found"
-  osascript -e 'display dialog "Python 3 が見つかりません。\n\nbrew install python\n\nを実行してから、もう一度起動してください。" buttons {"OK"} default button "OK" with title "Naruhodo"'
-  exit 1
-fi
-log "Using Python: $PYTHON"
-
-# ---- Python venv ----
-if [ ! -x "$APPDATA/.venv/bin/python" ]; then
-  log "Creating venv..."
-  "$PYTHON" -m venv "$APPDATA/.venv" >> "$LOG" 2>&1
-  if [ $? -ne 0 ]; then
-    log "ERROR: venv creation failed"
-    osascript -e 'display dialog "Python 仮想環境の作成に失敗しました。\nログ: '"$LOG"'" buttons {"OK"} default button "OK" with title "Naruhodo"'
-    exit 1
-  fi
-fi
-
-log "Installing dependencies..."
-"$APPDATA/.venv/bin/pip" install -q -r "$APPDATA/requirements.txt" >> "$LOG" 2>&1
-if [ $? -ne 0 ]; then
-  log "ERROR: pip install failed"
-  osascript -e 'display dialog "依存パッケージのインストールに失敗しました。\nログ: '"$LOG"'" buttons {"OK"} default button "OK" with title "Naruhodo"'
-  exit 1
-fi
-# Codex SDK は依存の同梱バイナリ(約200MB)を避けて SDK のみ入れる。
-# codex バイナリはシステムにインストール済みのもの（brew install codex）を検出して使う。
-"$APPDATA/.venv/bin/pip" install -q --no-deps openai-codex >> "$LOG" 2>&1 || log "WARN: openai-codex install failed (質問機能の Codex プロバイダのみ影響)"
 
 log "Starting app..."
 SETUP
@@ -240,10 +260,42 @@ NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 
 if [ -n "$DEVELOPER_ID" ]; then
   echo "🔏 Developer ID で署名中…"
+
+  # 同梱 Python は Hardened Runtime 下で自前の .so を dlopen するため、
+  # ライブラリ検証の緩和が必要。
+  # DMG に混入しないよう $WORK の外に置く（$WORK は create-dmg のソースになる）
+  ENTITLEMENTS="$(mktemp -t naruhodo-entitlements).plist"
+  cat > "$ENTITLEMENTS" <<'ENT'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.disable-library-validation</key><true/>
+  <key>com.apple.security.cs.allow-jit</key><true/>
+</dict>
+</plist>
+ENT
+
+  # 同梱 Python の全バイナリを内側から署名する（入れ子のコードは先に署名が要る）
+  echo "   同梱 Python のバイナリに署名中…"
+  find "$PYROOT" \( -name "*.so" -o -name "*.dylib" \) -print0 \
+    | xargs -0 -n 20 codesign --force --timestamp --options runtime \
+        --entitlements "$ENTITLEMENTS" --sign "$DEVELOPER_ID" 2>&1 | tail -3
+  find "$PYROOT/bin" -type f -perm +111 -print0 \
+    | xargs -0 -n 20 codesign --force --timestamp --options runtime \
+        --entitlements "$ENTITLEMENTS" --sign "$DEVELOPER_ID" 2>&1 | tail -3
+
+  # 同梱 Ollama は他社署名のまま入っているので、自分の Developer ID で署名し直す
+  echo "   同梱 Ollama のバイナリに署名中…"
+  codesign --force --timestamp --options runtime \
+    --entitlements "$ENTITLEMENTS" --sign "$DEVELOPER_ID" \
+    "$OLLAMADIR/ollama" "$OLLAMADIR/llama-server" 2>&1 | tail -2
+
   if [ -d "$APP/Contents/Frameworks/Sparkle.framework" ]; then
     codesign --force --deep --options runtime --sign "$DEVELOPER_ID" "$APP/Contents/Frameworks/Sparkle.framework" 2>&1
   fi
-  codesign --force --options runtime --sign "$DEVELOPER_ID" "$APP" 2>&1
+  codesign --force --timestamp --options runtime \
+    --entitlements "$ENTITLEMENTS" --sign "$DEVELOPER_ID" "$APP" 2>&1
   codesign --verify --deep --strict "$APP" 2>&1
   echo "   署名OK: $DEVELOPER_ID"
 else

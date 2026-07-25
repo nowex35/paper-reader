@@ -74,8 +74,9 @@ int main(int argc, char *argv[]) {
     snprintf(appdata, sizeof(appdata), "%s/Library/Application Support/Naruhodo",
              getenv("HOME"));
 
+    /* Python はバンドル同梱（ユーザー環境の python3 には依存しない） */
     char python_path[PATH_MAX];
-    snprintf(python_path, sizeof(python_path), "%s/.venv/bin/python", appdata);
+    snprintf(python_path, sizeof(python_path), "%s/Resources/python/bin/python3", contents_resolved);
 
     char desktop_path[PATH_MAX];
     snprintf(desktop_path, sizeof(desktop_path), "%s/desktop.py", appdata);
