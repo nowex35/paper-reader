@@ -283,6 +283,24 @@ def _model_present(model: str) -> bool:
         return False
 
 
+def _pull_status_label(status: str, model: str) -> str:
+    """Ollama の /api/pull が返す生ステータスを、ユーザー向けの文言に置き換える。
+
+    生の status には "pulling 5e8f2a3b9c1d..." のようにレイヤのダイジェストが
+    そのまま入る。意味不明な英数字列は「変なものが入っているのでは」という
+    不安を与えるだけなので、外には出さず既知のフェーズだけを日本語で見せる。
+    未知のステータスも素通ししない（将来 Ollama が増やしても漏れない）。
+    """
+    s = status.strip().lower()
+    if s.startswith("pulling manifest"):
+        return _dt("desktop.pull_manifest")
+    if s.startswith("verifying"):
+        return _dt("desktop.pull_verifying")
+    if s.startswith("writing") or s.startswith("removing") or s == "success":
+        return _dt("desktop.pull_finishing")
+    return _dt("desktop.downloading_model", model=model)
+
+
 def _pull_model_with_progress(window, model: str) -> None:
     """Ollama の /api/pull を使い、ダウンロード進捗をローディング画面に反映する。"""
     import http.client
@@ -308,12 +326,12 @@ def _pull_model_with_progress(window, model: str) -> None:
             completed = obj.get("completed", 0)
             if total and completed:
                 pct = int(52 + (completed / total) * 16)
-                size_mb = completed / 1024 / 1024
-                total_mb = total / 1024 / 1024
-                msg = f"{status}（{size_mb:.0f}/{total_mb:.0f} MB）"
+                msg = _dt("desktop.pull_downloading",
+                          done=f"{completed / 1024 / 1024:.0f}",
+                          total=f"{total / 1024 / 1024:.0f}")
             else:
                 pct = 52
-                msg = status or _dt("desktop.downloading_model", model=model)
+                msg = _pull_status_label(status, model)
             _update_loading(window, msg, min(pct, 68))
     conn.close()
 

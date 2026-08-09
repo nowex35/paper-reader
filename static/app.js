@@ -62,7 +62,24 @@ const I18n = (() => {
     document.documentElement.lang = lang;
   }
 
-  return { t, load, init, applyDom, get lang() { return lang; } };
+  // 翻訳の読み込み完了を待つための Promise。
+  // 動的に生成する DOM（メモ一覧など）は data-i18n が効かず、init 前に t() を
+  // 呼ぶとキー文字列（"list.empty" 等）がそのまま画面に出てしまうため、
+  // 描画側は必ず I18n.ready を await してから t() を使うこと。
+  let markReady;
+  const ready = new Promise((resolve) => { markReady = resolve; });
+
+  return {
+    t, load, applyDom, ready,
+    async init(uiLang) {
+      try {
+        await init(uiLang);
+      } finally {
+        markReady();
+      }
+    },
+    get lang() { return lang; },
+  };
 })();
 
 function appConfirm(msg) {
@@ -2809,6 +2826,8 @@ const Memo = (() => {
     } catch {
       all = [];
     }
+    // 翻訳が来る前に描くと "list.empty" のようなキーが出るので待つ
+    await I18n.ready;
     render();
   }
 
@@ -3421,15 +3440,13 @@ const Memo = (() => {
 
 /* ---------- i18n 初期化 ---------- */
 (async () => {
+  // I18n.ready を待っている描画があるので、どの経路でも必ず init を通す
+  let uiLang = "ja";
   try {
     const r = await fetch("/api/settings");
-    if (r.ok) {
-      const s = await r.json();
-      await I18n.init(s.ui_language || "ja");
-    }
-  } catch {
-    await I18n.init("ja");
-  }
+    if (r.ok) uiLang = (await r.json()).ui_language || "ja";
+  } catch {}
+  await I18n.init(uiLang);
   if (typeof Ask !== "undefined" && Ask.checkStatus) Ask.checkStatus();
   if (typeof ExplainMode !== "undefined") ExplainMode.update();
 })();

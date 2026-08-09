@@ -284,6 +284,10 @@
   "desktop.starting_ollama": "正在启动 Ollama…",
   "desktop.checking_model": "正在检查模型…",
   "desktop.downloading_model": "正在下载模型（{model}）…",
+  "desktop.pull_manifest": "正在准备 AI 模型…",
+  "desktop.pull_downloading": "正在下载 AI 模型（{done}/{total} MB）",
+  "desktop.pull_verifying": "正在校验下载内容…",
+  "desktop.pull_finishing": "正在完成设置…",
   "desktop.starting_app": "正在启动应用…",
   "desktop.ready": "准备就绪"
 }

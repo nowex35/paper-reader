@@ -284,6 +284,10 @@
   "desktop.starting_ollama": "Starting Ollama…",
   "desktop.checking_model": "Checking model…",
   "desktop.downloading_model": "Downloading model ({model})…",
+  "desktop.pull_manifest": "Preparing the AI model…",
+  "desktop.pull_downloading": "Downloading the AI model ({done}/{total} MB)",
+  "desktop.pull_verifying": "Verifying the download…",
+  "desktop.pull_finishing": "Finishing setup…",
   "desktop.starting_app": "Starting app…",
   "desktop.ready": "Ready"
 }

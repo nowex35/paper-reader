@@ -284,6 +284,10 @@
   "desktop.starting_ollama": "Ollama 시작 중…",
   "desktop.checking_model": "모델 확인 중…",
   "desktop.downloading_model": "모델 다운로드 중 ({model})…",
+  "desktop.pull_manifest": "AI 모델을 준비하는 중…",
+  "desktop.pull_downloading": "AI 모델 다운로드 중 ({done}/{total} MB)",
+  "desktop.pull_verifying": "다운로드를 검증하는 중…",
+  "desktop.pull_finishing": "설정을 마무리하는 중…",
   "desktop.starting_app": "앱 시작 중…",
   "desktop.ready": "준비 완료"
 }
