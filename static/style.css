@@ -1595,6 +1595,9 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
 @keyframes mode-flash-dark { 0% { background: #2a3a5a; } 100% { background: var(--bg-hover); } }
 [data-theme="dark"] #listPane { background: var(--bg-surface); border-right-color: var(--border); }
 [data-theme="dark"] .li-item:hover { background: var(--bg-hover); }
+/* 共通の [data-theme="dark"] button が背景を塗るので、一覧の × は透明に戻す */
+[data-theme="dark"] .li-del { background: transparent; }
+[data-theme="dark"] .li-del:hover { background: rgba(239, 83, 80, .18); color: var(--danger); }
 [data-theme="dark"] .li-item.active { background: rgba(77, 142, 255, .18); }
 [data-theme="dark"] .welcome { background: var(--bg-surface); color: var(--text); }
 [data-theme="dark"] .welcome-step { background: var(--bg-hover); padding: 10px 12px; border-radius: 10px; }
