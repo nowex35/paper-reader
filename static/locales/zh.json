@@ -37,7 +37,7 @@
   "bookmark.confirm_clear": "确定要删除全部 {count} 个书签吗？",
   "bookmark.cleared": "已删除全部书签",
   "bookmark.jumped": "书签 #{index} / {total}",
-  "bookmark.none": "暂无书签（按 ⌘B 添加）",
+  "bookmark.none": "暂无书签（按 ⌘D 添加）",
   "bookmark.save_failed": "⚠ 书签保存到服务器失败（已保存到本地）",
 
   "shortcuts.aria": "快捷键列表",
@@ -227,7 +227,7 @@
   "welcome.step2_title": "选中文本 → 解说（⌘E）",
   "welcome.step2_desc": "拖选感兴趣的内容。将显示翻译、术语解释以及通俗易懂的说明",
   "welcome.step3_title": "书签、笔记与布局",
-  "welcome.step3_desc": "⌘D 添加书签、⌘B 展开/收起笔记、⌘J 聚焦笔记、⌘M 论文列表、⊞ 按钮切换标准/三栏布局。←/→ 翻页",
+  "welcome.step3_desc": "⌘D 添加书签、⌘B 展开/收起笔记、⌘J 聚焦笔记、⌘M 论文列表、⌘. 切换标准/三栏布局。←/→ 翻页",
   "welcome.step4_title": "向论文提问（可选）",
   "welcome.step4_desc": "在 设置中注册API密钥（Gemini/OpenAI/Claude/本地AI），即可基于论文全文进行提问",
   "welcome.tip": "将鼠标悬停在顶栏右侧的 ? 上可查看快捷键列表",

@@ -37,7 +37,7 @@
   "bookmark.confirm_clear": "북마크 {count}개를 모두 삭제하시겠습니까?",
   "bookmark.cleared": "북마크 전체 삭제 완료",
   "bookmark.jumped": "북마크 #{index} / {total}",
-  "bookmark.none": "아직 북마크가 없습니다 (⌘B로 추가)",
+  "bookmark.none": "아직 북마크가 없습니다 (⌘D로 추가)",
   "bookmark.save_failed": "⚠ 북마크 서버 저장 실패 (로컬에는 저장됨)",
 
   "shortcuts.aria": "단축키 목록",
@@ -227,7 +227,7 @@
   "welcome.step2_title": "텍스트를 선택 → 해설 (⌘E)",
   "welcome.step2_desc": "궁금한 부분을 드래그하세요. 번역·용어 해설·'요약하면 무슨 뜻인지'가 표시됩니다",
   "welcome.step3_title": "북마크·메모·레이아웃",
-  "welcome.step3_desc": "⌘D 북마크 추가, ⌘B 메모 열기/닫기, ⌘J 메모 포커스, ⌘M 논문 목록, ⊞ 버튼으로 표준/3컬럼 전환. ←/→로 페이지 넘기기",
+  "welcome.step3_desc": "⌘D 북마크 추가, ⌘B 메모 열기/닫기, ⌘J 메모 포커스, ⌘M 논문 목록, ⌘.로 표준/3컬럼 전환. ←/→로 페이지 넘기기",
   "welcome.step4_title": "논문에 질문 (선택 사항)",
   "welcome.step4_desc": "설정에서 API 키 (Gemini/OpenAI/Claude/로컬 AI)를 등록하면 논문 전문을 기반으로 질문할 수 있습니다",
   "welcome.tip": "헤더 오른쪽 끝의 ?에 커서를 올리면 단축키 목록이 표시됩니다",

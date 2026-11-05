@@ -37,7 +37,7 @@
   "bookmark.confirm_clear": "Delete all {count} bookmarks?",
   "bookmark.cleared": "All bookmarks deleted",
   "bookmark.jumped": "Bookmark #{index} / {total}",
-  "bookmark.none": "No bookmarks yet (press ⌘B to add)",
+  "bookmark.none": "No bookmarks yet (press ⌘D to add)",
   "bookmark.save_failed": "⚠ Failed to save bookmark to server (saved locally)",
 
   "shortcuts.aria": "Shortcut list",
@@ -227,7 +227,7 @@
   "welcome.step2_title": "Select text → Explain (⌘E)",
   "welcome.step2_desc": "Drag over any passage. You'll get a translation, term definitions, and a plain-language summary",
   "welcome.step3_title": "Bookmarks, Memos & Layout",
-  "welcome.step3_desc": "⌘D Add bookmark, ⌘B Toggle memo, ⌘J Focus memo, ⌘M Paper list, ⊞ button for standard/3-column layout. ←/→ to navigate pages",
+  "welcome.step3_desc": "⌘D Add bookmark, ⌘B Toggle memo, ⌘J Focus memo, ⌘M Paper list, ⌘. for standard/3-column layout. ←/→ to navigate pages",
   "welcome.step4_title": "Ask questions about the paper (optional)",
   "welcome.step4_desc": "Register an API key (Gemini/OpenAI/Claude/local AI) in Settings to ask questions based on the full paper text",
   "welcome.tip": "Hover over the ? in the top-right corner to see all keyboard shortcuts",

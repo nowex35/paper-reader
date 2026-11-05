@@ -37,7 +37,7 @@
   "bookmark.confirm_clear": "ブックマーク {count} 件を全て削除しますか？",
   "bookmark.cleared": "ブックマークを全削除",
   "bookmark.jumped": "ブックマーク #{index} / {total}",
-  "bookmark.none": "ブックマークはまだありません（⌘B で追加）",
+  "bookmark.none": "ブックマークはまだありません（⌘D で追加）",
   "bookmark.save_failed": "⚠ しおりのサーバ保存に失敗（ローカルには保存済み）",
 
   "shortcuts.aria": "ショートカット一覧",
@@ -227,7 +227,7 @@
   "welcome.step2_title": "テキストを選択 → 解説（⌘E）",
   "welcome.step2_desc": "気になる箇所をドラッグ。翻訳・用語解説・「要するにどういうことか」が表示されます",
   "welcome.step3_title": "しおり・メモ・レイアウト",
-  "welcome.step3_desc": "⌘D しおり追加、⌘B メモ開閉、⌘J メモフォーカス、⌘M 論文一覧、⊞ ボタンで標準/3カラム切替。←/→ でページ送り",
+  "welcome.step3_desc": "⌘D しおり追加、⌘B メモ開閉、⌘J メモフォーカス、⌘M 論文一覧、⌘. で標準/3カラム切替。←/→ でページ送り",
   "welcome.step4_title": "論文に質問（オプション）",
   "welcome.step4_desc": "設定からAPIキー（Gemini/OpenAI/Claude/ローカルAI）を登録すると、論文全文を踏まえた質問ができます",
   "welcome.tip": "ヘッダー右端の ? にカーソルを乗せるとショートカット一覧",
