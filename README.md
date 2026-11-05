@@ -17,6 +17,11 @@
   初回読み込みにインターネット接続が必要。
 - 既定モデル `qwen3.5:4b`（ハイブリッド推論・~2.8GB、16GB Macで軽快）。
   `.env` で変更可（高品質: `qwen3:8b` / 和訳の自然さ重視: `gemma3:12b`）。
+- 解説の「日本語訳」は翻訳特化モデル **PLaMo 3 Translate**（PFN・2B・~1.8GB）が担当し、
+  用語解説と主旨を上記モデルが書く。PLaMo 3 は Ollama 0.40.14 以降が必要で、
+  動かない環境では従来どおり解説モデルが訳も書く。
+  **Built with PLaMo** — PLaMo 3 Translate は [PLaMo コミュニティライセンス](static/licenses/PLaMo-Community-License-ja.txt)
+  （[English](static/licenses/PLaMo-Community-License-en.txt)）のもとで利用している。
 
 > 配布版（DMG）は **Apple Silicon 専用**。Python ランタイム・依存パッケージ・
 > **Ollama** をすべて同梱しているので、ユーザーは何も別途インストールしなくてよい
@@ -41,6 +46,7 @@ brew services start ollama   # launchd 常駐。再起動後も自動。ター�
 どちらの方法でも最後にモデルを取得（初回のみ・約2.5GB）:
 ```bash
 ollama pull qwen3.5:4b
+ollama pull hf.co/pfnet/plamo-3-translate-2b-GGUF:Q4_K_M   # 日本語訳用（約1.8GB）
 ```
 
 > 配布版（DMG）は Ollama 本体を同梱し、アプリ専用のポートで起動するため、
@@ -139,6 +145,7 @@ python server.py
 | 項目 | 場所 | 既定 |
 |---|---|---|
 | モデル | `.env` の `OLLAMA_MODEL` | `qwen3.5:4b` |
+| 日本語訳のモデル | `.env` の `TRANSLATE_MODEL` | `hf.co/pfnet/plamo-3-translate-2b-GGUF:Q4_K_M` |
 | Ollama エンドポイント | `.env` の `OLLAMA_HOST` | `http://localhost:11434` |
 | 解説の構成・口調 | `server.py` の `SYSTEM_INSTRUCTION` | 訳／用語／主旨の3節 |
 

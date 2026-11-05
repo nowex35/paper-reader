@@ -22,6 +22,8 @@ import uvicorn
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_MODEL = "qwen3.5:4b"
+# 解説の「日本語訳」節に使う翻訳特化モデル（server.py の TRANSLATE_MODEL と揃える）
+TRANSLATE_MODEL = "hf.co/pfnet/plamo-3-translate-2b-GGUF:Q4_K_M"
 
 # .app から起動された場合、ランチャがバンドルのパスを渡してくる。
 BUNDLE_PATH = os.environ.get("NARUHODO_BUNDLE_PATH", "")
@@ -272,6 +274,14 @@ def _current_model() -> str:
         return DEFAULT_MODEL
 
 
+def _native_language() -> str:
+    try:
+        settings = os.path.join(APP_DIR, ".settings.json")
+        return json.loads(open(settings, encoding="utf-8").read()).get("native_language", "ja")
+    except Exception:  # noqa: BLE001
+        return "ja"
+
+
 def _model_present(model: str) -> bool:
     try:
         r = urllib.request.urlopen(_ollama_url("/api/tags"), timeout=3)
@@ -301,7 +311,7 @@ def _pull_status_label(status: str, model: str) -> str:
     return _dt("desktop.downloading_model", model=model)
 
 
-def _pull_model_with_progress(window, model: str) -> None:
+def _pull_model_with_progress(window, model: str, label: str = "") -> None:
     """Ollama の /api/pull を使い、ダウンロード進捗をローディング画面に反映する。"""
     import http.client
     host, port = _ollama_hostport()
@@ -331,7 +341,7 @@ def _pull_model_with_progress(window, model: str) -> None:
                           total=f"{total / 1024 / 1024:.0f}")
             else:
                 pct = 52
-                msg = _pull_status_label(status, model)
+                msg = _pull_status_label(status, label or model)
             _update_loading(window, msg, min(pct, 68))
     conn.close()
 
@@ -493,6 +503,15 @@ def _boot(window) -> None:
                 _pull_model_with_progress(window, model)
             except Exception as e:  # noqa: BLE001
                 print(f"[naruhodo] Model pull failed: {e}")
+        # 日本語訳は翻訳特化モデルが担当する。取れなくても解説は動く（訳も
+        # 解説モデルが書く）ので、失敗は起動を止めない。
+        if _native_language() == "ja" and not _model_present(TRANSLATE_MODEL):
+            _update_loading(window, _dt("desktop.downloading_model",
+                                        model="PLaMo 3 Translate"), 52)
+            try:
+                _pull_model_with_progress(window, TRANSLATE_MODEL, "PLaMo 3 Translate")
+            except Exception as e:  # noqa: BLE001
+                print(f"[naruhodo] Translate model pull failed: {e}")
 
     _update_loading(window, _dt("desktop.starting_app"), 70)
 
@@ -522,19 +541,19 @@ def _cleanup_ollama() -> None:
     if _cleanup_done:
         return
     _cleanup_done = True
-    try:
-        model = _current_model()
-        if model and _ollama_up():
-            req = urllib.request.Request(
-                _ollama_url("/api/generate"),
-                data=json.dumps({"model": model, "keep_alive": 0}).encode(),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            urllib.request.urlopen(req, timeout=3)
-            print(f"[naruhodo] unloaded model {model}")
-    except Exception:  # noqa: BLE001
-        pass
+    for model in (_current_model(), TRANSLATE_MODEL):
+        try:
+            if model and _ollama_up():
+                req = urllib.request.Request(
+                    _ollama_url("/api/generate"),
+                    data=json.dumps({"model": model, "keep_alive": 0}).encode(),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=3)
+                print(f"[naruhodo] unloaded model {model}")
+        except Exception:  # noqa: BLE001
+            pass
 
     if _we_started_ollama:
         try:

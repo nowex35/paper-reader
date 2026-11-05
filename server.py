@@ -52,6 +52,10 @@ load_dotenv(Path(__file__).parent / ".env")
 # 解説はローカルLLM（Ollama）で生成。クラウド送信なし・APIキー不要。
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:4b").strip()
+# 解説の「日本語訳」節だけは翻訳特化モデル PLaMo 3 Translate で出す。読めない
+# 環境（PLaMo 3 未対応の古い Ollama・モデル未取得）では OLLAMA_MODEL が訳も書く。
+TRANSLATE_MODEL = os.environ.get(
+    "TRANSLATE_MODEL", "hf.co/pfnet/plamo-3-translate-2b-GGUF:Q4_K_M").strip()
 
 # 質問機能はクラウドLLM（Gemini / OpenAI / Anthropic）に投げる。
 # 翻訳=ローカル(Ollama)、質問=クラウドという役割分担。
@@ -221,7 +225,8 @@ def _is_japanese_text(text: str) -> bool:
     return alpha_count > 0 and ja_count / alpha_count > 0.3
 
 
-def _build_explain_instruction(lang: str, source_is_native: bool = False) -> str:
+def _build_explain_instruction(lang: str, source_is_native: bool = False,
+                               translated: bool = False) -> str:
     if lang == "en":
         return """You are an assistant helping a researcher read English academic papers.
 The user has selected a passage in a paper viewer.
@@ -245,6 +250,25 @@ Keep accuracy intact. End with one sentence on where this passage fits in the pa
 
 ## 用語・記号の解説
 選択箇所に出てくる専門用語・略語・数式記号を箇条書きで簡潔に説明する。無ければ「特になし」。
+
+## 要するにどういうことか
+読者が「あーそういうことね」と腹落ちできるように、具体的な例えや身近な比喩を交えて説明する。
+まず一文で「つまり○○ということ」と平易に言い切り、その後に具体例や直感的なイメージで補足する。
+たとえば数式なら「要するに入力が大きいほど出力が鈍くなる、という関係」のように噛み砕く。
+手法の説明なら「ざっくり言えば、辞書を引く代わりに目次だけ見て当たりをつける方式」のように
+読者の頭に絵が浮かぶレベルまで落とす。ただし正確さは犠牲にしないこと。
+最後に、論文の流れの中でこの箇所がどこに位置するか（導入・手法・実験・考察など）を一言添える。
+"""
+    if lang == "ja" and translated:
+        # 「## 日本語訳」は PLaMo が出力済み。ここでは残りの2節だけを書かせる。
+        return """あなたは英語の学術論文を読む日本人研究者を助けるアシスタントです。
+ユーザーは論文ビューワで分からない箇所を選択しています。
+渡された「選択箇所」について、簡潔で正確な日本語の解説を Markdown で出力してください。
+選択箇所の日本語訳は表示済みなので、訳は書かないこと。用語は添付の訳文に合わせる。
+出力は必ず次の2つの見出し構成にし、冗長な前置きは書かないこと。
+
+## 用語・記号の解説
+選択箇所に出てくる専門用語・略語・数式記号を箇条書きで簡潔に説明する。原語を括弧で併記する。無ければ「特になし」。
 
 ## 要するにどういうことか
 読者が「あーそういうことね」と腹落ちできるように、具体的な例えや身近な比喩を交えて説明する。
@@ -422,18 +446,97 @@ def ollama_status() -> dict:
             "model": CURRENT_MODEL, "models": models}
 
 
+_PFML_TOKEN_RE = re.compile(r"<\|plamo:[^|]*\|>")
+# PLaMo を読み込めなかった（Ollama が HTTP エラーを返した）ら、以後は毎回の
+# 失敗待ちを省いて従来の経路に直行する。モデル取得・Ollama 更新は再起動で反映。
+_plamo_unavailable = False
+
+
+def _pfml_text(s: str | None) -> str:
+    # PFML3 の区切りトークンが本文に混ざるとプロンプト構造が壊れるので除く
+    return _PFML_TOKEN_RE.sub("", _sanitize(s)).strip()
+
+
+def stream_plamo_translate(text: str, context: str | None):
+    """PLaMo 3 Translate で選択箇所を日本語に訳す。GGUF 内蔵のチャットテンプレートは
+    Jinja で Ollama には解釈できないため、PFML3 形式のプロンプトを組んで raw で渡す
+    （先頭の BOS は Ollama が付けるので書かない）。"""
+    prompt = "<|plamo:tag|>dataset<|plamo:msg|>translation"
+    ctx = _pfml_text(context)
+    if ctx:
+        prompt += "<|plamo:tag|>context<|plamo:msg|>" + ctx
+    prompt += ("<|plamo:tag|>input<|plamo:msg|>" + _pfml_text(text)
+               + "<|plamo:tag|>output<|plamo:key|>lang<|plamo:val|>ja"
+               + "<|plamo:key|>form<|plamo:val|>plain<|plamo:msg|>")
+    payload = {
+        "model": TRANSLATE_MODEL,
+        "prompt": prompt,
+        "raw": True,
+        "stream": True,
+        "options": {"temperature": 0, "stop": ["<|plamo:tag|>", "<|plamo:bos|>"]},
+    }
+    timeout = httpx.Timeout(600.0, connect=5.0)
+    with httpx.Client(timeout=timeout) as c:
+        with c.stream("POST", f"{OLLAMA_HOST}/api/generate", json=payload) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                piece = obj.get("response")
+                if piece:
+                    yield piece
+                if obj.get("done"):
+                    break
+
+
+def _stream_translation_section(text: str, context: str | None):
+    """PLaMo の訳を「## 日本語訳」節として流し、訳文を返す。最初の文字が出る前に
+    失敗したら何も出さずに None を返す（呼び出し側は従来の3節構成に戻す）。"""
+    global _plamo_unavailable
+    if _plamo_unavailable:
+        return None
+    acc = ""
+    try:
+        for piece in stream_plamo_translate(text, context):
+            if not acc:
+                piece = piece.lstrip()
+                if not piece:
+                    continue
+                yield "## 日本語訳\n\n"
+            acc += piece
+            yield piece
+    except httpx.HTTPStatusError as e:
+        print(f"[naruhodo] PLaMo translate unavailable: HTTP {e.response.status_code}")
+        _plamo_unavailable = True
+    except Exception as e:  # noqa: BLE001
+        print(f"[naruhodo] PLaMo translate failed: {type(e).__name__}: {e}")
+    if not acc:
+        return None
+    # PLaMo コミュニティライセンス第4・5条: 生成物であることと Built with PLaMo を明示する
+    yield "\n\n<sub>Built with PLaMo（PLaMo 3 Translate による訳）</sub>\n\n"
+    return acc.strip()
+
+
 def stream_ollama(text: str, context: str | None, mode: str = "explain"):
     builder = MODE_INSTRUCTIONS.get(mode, _build_explain_instruction)
+    translation = None
     if mode == "explain":
         source_is_native = SKIP_TRANSLATION or (NATIVE_LANGUAGE != "en" and _is_japanese_text(text))
-        instruction = builder(NATIVE_LANGUAGE, source_is_native)
+        if NATIVE_LANGUAGE == "ja" and not source_is_native:
+            translation = yield from _stream_translation_section(text, context)
+        instruction = builder(NATIVE_LANGUAGE, source_is_native,
+                              translated=translation is not None)
     else:
         instruction = builder(NATIVE_LANGUAGE)
     payload = {
         "model": CURRENT_MODEL,
         "messages": [
             {"role": "system", "content": instruction},
-            {"role": "user", "content": build_prompt(text, context)},
+            {"role": "user", "content": build_prompt(text, context, translation)},
         ],
         "stream": True,
         # qwen3.5 等のハイブリッド推論モデルは既定で回答前に思考トークンを長く
@@ -905,13 +1008,15 @@ def _sanitize(s: str | None) -> str:
     return _normalize_math(_SURROGATE_RE.sub("", s or ""))
 
 
-def build_prompt(text: str, context: str | None) -> str:
+def build_prompt(text: str, context: str | None, translation: str | None = None) -> str:
     parts = []
     text = _sanitize(text)
     context = _sanitize(context)
     if context and context.strip():
         parts.append("【参考: 同じページの周辺テキスト（訳出は不要、文脈把握用）】\n" + context.strip())
     parts.append("【選択箇所】\n" + text.strip())
+    if translation:
+        parts.append("【選択箇所の日本語訳（表示済み）】\n" + translation)
     return "\n\n".join(parts)
 
 
