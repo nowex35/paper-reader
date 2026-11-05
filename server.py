@@ -57,7 +57,7 @@ OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:4b").strip()
 TRANSLATE_MODEL = os.environ.get(
     "TRANSLATE_MODEL", "hf.co/pfnet/plamo-3-translate-2b-GGUF:Q4_K_M").strip()
 
-# 質問機能はクラウドLLM（Gemini / OpenAI / Anthropic）に投げる。
+# 質問機能はクラウドLLM（Codex / Gemini / OpenAI / Anthropic、または OpenAI 互換の custom）に投げる。
 # 翻訳=ローカル(Ollama)、質問=クラウドという役割分担。
 # プロバイダ・APIキーを設定すれば質問欄が有効になる。
 _legacy_key = os.environ.get("GEMINI_API_KEY", "").strip()
