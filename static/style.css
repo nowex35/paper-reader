@@ -2,21 +2,31 @@
 html, body { height: 100%; margin: 0; }
 
 :root {
+  color-scheme: light;
   --bg: #f0f1f3;
   --bg-surface: #fff;
   --bg-hover: #f0f0f3;
   --bg-input: #fff;
   --bg-drag: #e3e3e7;
+  --bg-subtle: #fafafb;
   --text: #1c1c1e;
   --text-secondary: #3a3a3e;
-  --text-muted: #8a8a8e;
+  /* 背景 #f0f1f3 上でも 4.5:1 を確保する（旧 #8a8a8e は 3.0:1） */
+  --text-muted: #6b6b70;
   --text-faint: #6a6a6e;
+  --placeholder: #737378;
   --border: #dadade;
   --border-input: #d8d8dd;
   --border-light: #c5c5ca;
   --border-section: #ececef;
-  --accent: #1c6dff;
+  /* 文字・リンク用のアクセント */
+  --accent: #1a66f0;
   --accent-hover: #0b59e6;
+  /* 白文字を載せる塗りボタン用のアクセント（白との比 5.0:1） */
+  --accent-fill: #1a66f0;
+  --accent-fill-hover: #0b59e6;
+  --accent-soft-bg: #eef3ff;
+  --accent-soft-text: #2a4d8f;
   --shadow-card: 0 1px 6px rgba(0,0,0,.18);
   --shadow-popover: 0 6px 20px rgba(0,0,0,.3);
   --pdf-filter: none;
@@ -27,21 +37,30 @@ html, body { height: 100%; margin: 0; }
   --danger: #d32f2f;
 }
 [data-theme="dark"] {
+  /* スクロールバー・フォーム部品もダーク表示にする */
+  color-scheme: dark;
   --bg: #1a1a1e;
   --bg-surface: #27272b;
   --bg-hover: #333338;
   --bg-input: #2f2f34;
   --bg-drag: #3a3a40;
+  --bg-subtle: #222226;
   --text: #e4e4e8;
   --text-secondary: #c8c8cc;
-  --text-muted: #8a8a90;
-  --text-faint: #7a7a80;
+  --text-muted: #9a9aa0;
+  --text-faint: #a4a4aa;
+  --placeholder: #8e8e94;
   --border: #3a3a40;
   --border-input: #4a4a50;
   --border-light: #444448;
   --border-section: #333338;
   --accent: #4d8eff;
   --accent-hover: #3a7bef;
+  /* #4d8eff に白文字は 3.2:1 で読みにくいので、塗りは一段濃い青 */
+  --accent-fill: #2b6be6;
+  --accent-fill-hover: #2259c8;
+  --accent-soft-bg: #1e2433;
+  --accent-soft-text: #a9c1f0;
   --shadow-card: 0 1px 6px rgba(0,0,0,.4);
   --shadow-popover: 0 6px 20px rgba(0,0,0,.5);
   --pdf-filter: invert(0.88) hue-rotate(180deg);
@@ -86,14 +105,19 @@ html, body { height: 100%; margin: 0; }
   to { transform: rotate(360deg); }
 }
 ::placeholder {
-  color: #c0c0c4;
+  color: var(--placeholder);
 }
 .CodeMirror-placeholder {
-  color: #c0c0c4 !important;
+  color: var(--placeholder) !important;
 }
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 読み込みスピナー以外の動き（パネルの開閉・フラッシュ）を止める */
+  *, *::before, *::after { transition-duration: .01ms !important; }
+  .bookmark-marker.flash, #modeBtn.flash { animation: none !important; }
 }
 button:focus:not(:focus-visible),
 input:focus:not(:focus-visible),
@@ -124,6 +148,21 @@ body {
 }
 #topbar > * { flex-shrink: 0; }
 #topbar .spacer { flex: 1; min-width: 4px; }
+/* ヘッダーの操作部品は高さ 32px に揃える（押せる範囲も確保） */
+#topbar > button,
+#bookmarkGroup > button { height: 32px; padding-top: 0; padding-bottom: 0; }
+#openBtn, #memoToggle, #bookmarkBtn { font-size: 14px; }
+/* アイコンだけのボタンは 32px 四方 */
+#topbar #listToggle,
+#topbar #layoutBtn,
+#topbar #settingsBtn {
+  width: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+#listToggle svg, #layoutBtn svg { display: block; pointer-events: none; }
 #fileName {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -149,12 +188,13 @@ button:hover { background: var(--bg-hover); }
 }
 #pageInput {
   width: 42px;
-  padding: 2px 4px;
+  height: 28px;
+  padding: 0 4px;
   font: inherit;
   font-size: 13px;
   text-align: center;
   border: 1px solid var(--border-input);
-  border-radius: 4px;
+  border-radius: 6px;
   -moz-appearance: textfield;
 }
 #pageInput::-webkit-inner-spin-button,
@@ -162,18 +202,16 @@ button:hover { background: var(--bg-hover); }
 #listToggle {
   background: none;
   border: none;
-  font-size: 28px;
-  padding: 4px 8px;
   color: var(--text-muted);
 }
-#listToggle:hover { color: var(--text); background: none; }
+#listToggle:hover { color: var(--text); background: var(--bg-hover); }
 #listToggle.active { color: var(--text); }
 #openBtn {
-  background: #1c6dff;
+  background: var(--accent-fill);
   color: #fff;
-  border-color: #1c6dff;
+  border-color: var(--accent-fill);
 }
-#openBtn:hover { background: #0b59e6; }
+#openBtn:hover { background: var(--accent-fill-hover); }
 #modelSelect {
   font: inherit;
   font-size: 13px;
@@ -301,6 +339,7 @@ button:hover { background: var(--bg-hover); }
 #bookmarkBtn { white-space: nowrap; }
 /* 前/次ナビ: 白くて細い矢印ボタン */
 .bm-nav {
+  min-width: 28px;
   padding: 6px 9px;
   font-size: 15px;
   line-height: 1;
@@ -325,7 +364,15 @@ button:hover { background: var(--bg-hover); }
   cursor: help;
   user-select: none;
 }
-#bookmarkHelp:hover, #bookmarkHelp:focus { color: #1c6dff; border-color: #1c6dff; outline: none; }
+/* 見た目は 20px の丸のまま、ホバー・クリックの当たり判定だけ広げる */
+#bookmarkHelp::after,
+#shortcutsHelp::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+/* outline を消すとキーボード操作で位置を見失うので、リングは :focus-visible に任せる */
+#bookmarkHelp:hover, #bookmarkHelp:focus { color: var(--accent); border-color: var(--accent); }
 .bm-help-popover {
   display: none;
   position: absolute;
@@ -348,7 +395,7 @@ button:hover { background: var(--bg-hover); }
   cursor: default;
 }
 #bookmarkHelp:hover .bm-help-popover,
-#bookmarkHelp:focus .bm-help-popover { display: grid; }
+#bookmarkHelp:focus-within .bm-help-popover { display: grid; }
 .bm-help-popover b { grid-column: 1 / -1; margin-bottom: 2px; font-size: 12.5px; }
 .bm-help-popover kbd {
   justify-self: start;
@@ -470,6 +517,8 @@ button:hover { background: var(--bg-hover); }
   text-align: center;
 }
 #findBar button {
+  min-width: 28px;
+  height: 28px;
   padding: 3px 8px;
   font-size: 13px;
   line-height: 1;
@@ -522,7 +571,7 @@ button:hover { background: var(--bg-hover); }
   justify-content: center;
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0,0,0,.15);
-  transition: background .15s, color .15s, box-shadow .15s;
+  transition: background .15s, color .15s, box-shadow .15s, bottom .15s ease;
 }
 .pdf-float-btn:hover,
 #fitPageBtn.active {
@@ -539,7 +588,7 @@ button:hover { background: var(--bg-hover); }
 #explainFab {
   position: fixed;
   z-index: 50;
-  background: #1c6dff;
+  background: var(--accent-fill);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -548,7 +597,7 @@ button:hover { background: var(--bg-hover); }
   box-shadow: 0 3px 10px rgba(0,0,0,.25);
   cursor: pointer;
 }
-#explainFab:hover { background: #0b59e6; }
+#explainFab:hover { background: var(--accent-fill-hover); }
 
 /* ---- settings button ---- */
 #settingsBtn {
@@ -583,7 +632,7 @@ button:hover { background: var(--bg-hover); }
 
 /* ---- results ---- */
 #results { flex: 1; overflow: auto; padding: 14px; }
-#results .empty { color: #9a9a9e; font-size: 14px; padding: 30px 6px; text-align: center; line-height: 1.7; }
+#results .empty { color: var(--text-muted); font-size: 14px; padding: 30px 6px; text-align: center; line-height: 1.7; }
 .card {
   border: none;
   border-radius: 10px;
@@ -616,7 +665,7 @@ button:hover { background: var(--bg-hover); }
   user-select: text;
   cursor: text;
 }
-.card .body h2 { font-size: 14px; margin: 14px 0 4px; color: #1c6dff; }
+.card .body h2 { font-size: 14px; margin: 14px 0 4px; color: var(--accent); }
 .card .body p { margin: 6px 0; }
 .card .body ul { margin: 4px 0; padding-left: 20px; }
 .card .body code { background: var(--bg-hover); padding: 1px 4px; border-radius: 4px; }
@@ -628,11 +677,11 @@ button:hover { background: var(--bg-hover); }
 }
 .card .toolbar button { padding: 4px 10px; font-size: 12px; }
 .card.loading .body.waiting { color: var(--text-muted); }
-.card.loading .body::after { content: " ▍"; color: #1c6dff; }
+.card.loading .body::after { content: " ▍"; color: var(--accent); }
 
 /* 質問カード(Gemini): 翻訳カードと見分けるため青系アクセント。src は質問文なので
    等幅ではなく本文フォントで読みやすく。 */
-.card.ask { box-shadow: 0 1px 4px rgba(28, 109, 255, .1), 0 0 1px rgba(28, 109, 255, .08); }
+.card.ask { box-shadow: 0 1px 4px rgba(26, 102, 240, .1), 0 0 1px rgba(26, 102, 240, .08); }
 .card.ask .src {
   background: #eef3ff;
   color: #2a4d8f;
@@ -645,7 +694,7 @@ button:hover { background: var(--bg-hover); }
 #askForm {
   flex: none;
   border-top: 1px solid var(--border-section);
-  background: #fafafb;
+  background: var(--bg-subtle);
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -653,9 +702,9 @@ button:hover { background: var(--bg-hover); }
 }
 #askQuote {
   font-size: 12px;
-  color: #2a4d8f;
-  background: #eef3ff;
-  border-left: 3px solid #1c6dff;
+  color: var(--accent-soft-text);
+  background: var(--accent-soft-bg);
+  border-left: 3px solid var(--accent);
   border-radius: 0 6px 6px 0;
   padding: 5px 8px;
   max-height: 60px;
@@ -677,18 +726,21 @@ button:hover { background: var(--bg-hover); }
   max-height: 160px;
   overflow-y: auto;
 }
+/* 1行の欄で案内文が折り返すとスクロールバーが出て途切れるので、1行に収めて省略する */
+#askInput:placeholder-shown { overflow-y: hidden; }
+#askInput::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #askInput:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 #askSend {
   flex: none;
-  background: #1c6dff;
+  background: var(--accent-fill);
   color: #fff;
   border: none;
   border-radius: 8px;
   padding: 8px 14px;
 }
-#askSend:hover { background: #0b59e6; }
-#askSend:disabled { background: #b9c8e6; cursor: default; }
-#askMeta { font-size: 11.5px; }
+#askSend:hover { background: var(--accent-fill-hover); }
+#askSend:disabled { background: var(--accent-fill); opacity: .45; cursor: default; }
+#askMeta { font-size: 11.5px; color: var(--text-muted); }
 /* ---- responsive ---- */
 @media (max-width: 900px) {
   #topbar { gap: 6px; padding: 6px 8px; }
@@ -707,10 +759,10 @@ button:hover { background: var(--bg-hover); }
   font-size: 15px;
   padding: 4px 8px;
   border-radius: 6px;
-  color: #666;
+  color: var(--text-muted);
 }
 #layoutBtn:hover { color: var(--text); background: var(--bg-hover); }
-#layoutBtn.active { background: #1c6dff; color: #fff; border-color: #1c6dff; }
+#layoutBtn.active { background: var(--accent-fill); color: #fff; border-color: var(--accent-fill); }
 
 /* ---- settings dialog ---- */
 #settingsDialog {
@@ -734,9 +786,14 @@ button:hover { background: var(--bg-hover); }
   border: none;
   font-size: 18px;
   cursor: pointer;
-  color: #888;
-  padding: 0 4px;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: -6px -8px -6px 0;
+  border-radius: 8px;
 }
+.settings-head button:hover { background: var(--bg-hover); color: var(--text); }
 .settings-body { padding: 18px; }
 .settings-section + .settings-section { margin-top: 32px; }
 .settings-section h3 {
@@ -753,7 +810,7 @@ button:hover { background: var(--bg-hover); }
   display: block;
   font-size: 12.5px;
   font-weight: 600;
-  color: #444;
+  color: var(--text-secondary);
   margin-bottom: 10px;
 }
 .settings-body select,
@@ -778,6 +835,8 @@ button:hover { background: var(--bg-hover); }
   color: var(--text-faint);
 }
 .settings-logo { border-radius: 6px; }
+/* .settings-body label の display:block に負けて横並びが崩れていたので詳細度を上げる */
+.settings-body .settings-toggle,
 .settings-toggle {
   display: flex;
   align-items: center;
@@ -824,23 +883,30 @@ button:hover { background: var(--bg-hover); }
 .toggle-wrap input:checked + .toggle-track {
   background: var(--accent);
 }
+.toggle-wrap input:focus-visible + .toggle-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .toggle-wrap input:checked + .toggle-track::after {
   transform: translateX(18px);
 }
+.settings-body .size-slider,
 .size-slider {
   display: flex;
   align-items: center;
-  gap: 8px;
   font-weight: 400;
   white-space: nowrap;
 }
+/* 「メモ」「14」「px」の幅をそろえて、3本のスライダーの左端を一直線にする */
+.size-slider > span:first-child { min-width: 4.5em; }
+.size-slider > span:nth-child(2) { min-width: 2.2em; text-align: right; }
 .size-slider input[type="range"] {
   flex: 1;
-  margin: 0;
+  margin: 0 0 0 10px;
 }
 .settings-help summary {
   cursor: pointer;
-  color: #1c6dff;
+  color: var(--accent);
   font-size: 12.5px;
 }
 .settings-help summary:hover { text-decoration: underline; }
@@ -849,7 +915,7 @@ button:hover { background: var(--bg-hover); }
   padding-left: 20px;
   line-height: 1.8;
 }
-.settings-help a { color: #1c6dff; }
+.settings-help a { color: var(--accent); }
 .settings-help p {
   margin: 8px 0 0;
   line-height: 1.5;
@@ -875,7 +941,7 @@ button:hover { background: var(--bg-hover); }
 #codexLoginRow .settings-desc { margin-bottom: 6px; }
 .codex-login-actions { display: flex; gap: 8px; }
 .codex-login-btn {
-  background: #1c6dff;
+  background: var(--accent-fill);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -884,7 +950,7 @@ button:hover { background: var(--bg-hover); }
   font-size: 12.5px;
   cursor: pointer;
 }
-.codex-login-btn:hover { background: #3d82ff; }
+.codex-login-btn:hover { background: var(--accent-fill-hover); }
 .codex-login-btn:disabled { opacity: 0.6; cursor: default; }
 .codex-logout-btn {
   background: none;
@@ -898,7 +964,7 @@ button:hover { background: var(--bg-hover); }
 }
 .codex-logout-btn:hover { color: #e53e3e; border-color: #e53e3e; }
 .settings-foot button {
-  background: #1c6dff;
+  background: var(--accent-fill);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -906,10 +972,10 @@ button:hover { background: var(--bg-hover); }
   font-size: 13px;
   cursor: pointer;
 }
-.settings-foot button:hover { background: #0b59e6; }
+.settings-foot button:hover { background: var(--accent-fill-hover); }
 
 /* ---- memo panel (下部トグル) ---- */
-#memoToggle.active { background: #1c6dff; color: #fff; border-color: #1c6dff; }
+#memoToggle.active { background: var(--accent-fill); color: #fff; border-color: var(--accent-fill); }
 #memoToggle.dirty::after {
   content: "";
   display: inline-block;
@@ -924,7 +990,7 @@ button:hover { background: var(--bg-hover); }
 #memoSaveBtn {
   border: none;
   background: transparent;
-  color: #1c6dff;
+  color: var(--accent);
   font-size: 12px;
   padding: 4px 6px;
   cursor: pointer;
@@ -939,7 +1005,7 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
   position: absolute;
   bottom: 0;
   left: 0;
-  right: 0;
+  right: var(--side-w, 0px);
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
@@ -959,6 +1025,10 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
   overflow: visible;
 }
 [data-layout="standard"] #memoResizer { display: none !important; }
+/* メモを開いている間は、PDF 右下のフィットボタンをメモパネルの上へ移す */
+[data-layout="standard"] #memoPanel.open ~ #pdfArea .pdf-float-btn {
+  bottom: calc(var(--memo-h, 300px) + 18px);
+}
 
 /* -- columns layout: メモ | PDF | AI 横3カラム -- */
 [data-layout="columns"] #memoPanel {
@@ -1030,7 +1100,7 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
 }
 #memoHead .spacer { flex: 1; min-width: 4px; }
 #memoHead button { padding: 4px 8px; font-size: 12px; white-space: nowrap; }
-#memoHead #memoClose { padding: 2px 8px; font-size: 15px; line-height: 1; }
+#memoHead #memoClose { min-width: 28px; min-height: 26px; padding: 2px 8px; font-size: 15px; line-height: 1; }
 .memo-sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
 #memoStatusBar {
   flex: none;
@@ -1076,7 +1146,7 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
 }
 #memoEdit .CodeMirror-scroll { padding: 6px 14px; }
 /* 編集中も見出しは大きく・太字は太く表示 */
-.cm-s-default .cm-header { color: #1d1d1f; font-weight: 700; line-height: 1.3; }
+.cm-s-default .cm-header { color: var(--text); font-weight: 700; line-height: 1.3; }
 .cm-s-default .cm-header-1 { font-size: 1.55em; }
 .cm-s-default .cm-header-2 { font-size: 1.3em; }
 .cm-s-default .cm-header-3 { font-size: 1.12em; }
@@ -1086,7 +1156,7 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
 .cm-s-default .cm-em { font-style: italic; }
 /* リスト項目のテキスト（variable-2/3）は本文色に戻す（既定テーマは青く塗る） */
 .cm-s-default .cm-variable-2,
-.cm-s-default .cm-variable-3 { color: #1d1d1f; }
+.cm-s-default .cm-variable-3 { color: var(--text); }
 /* 引用は控えめなグレーに */
 .cm-s-default .cm-quote { color: var(--text-faint); }
 /* 行頭の # や ** などの記法マーカーは少し控えめに */
@@ -1153,10 +1223,12 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
   font-size: 15px;
   color: var(--text-muted);
   cursor: pointer;
+  min-width: 28px;
+  height: 28px;
   padding: 2px 6px;
   border-radius: 6px;
 }
-#listCollapse:hover { background: #e6e6ea; color: #444; }
+#listCollapse:hover { background: var(--bg-hover); color: var(--text); }
 #listSearch {
   font: inherit;
   font-size: 12.5px;
@@ -1186,6 +1258,8 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
 .li-item:hover { background: #ececee; }
 .li-item.active { background: #e4ecff; }
 .li-item.focused { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* 本体にフォーカスしたときは行全体の枠（.focused）だけを出し、二重枠にしない */
+.li-main:focus-visible { outline: none; }
 .li-main { flex: 1; min-width: 0; }
 .li-title {
   font-weight: 600;
@@ -1207,18 +1281,23 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
   flex: none;
   border: none;
   background: transparent;
-  color: #b0b0b4;
+  color: var(--text-muted);
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
+  min-width: 28px;
+  height: 28px;
   padding: 3px 6px;
   border-radius: 6px;
   opacity: 0;
 }
 .li-item:hover .li-del { opacity: 1; }
-.li-del:hover { background: #e0c4c0; color: #c0362c; }
+.li-del:hover { background: rgba(211, 47, 47, .14); color: var(--danger); }
+/* キーボードで一覧を移動しているときも削除ボタンを見せる */
+.li-item.focused .li-del,
+.li-item:focus-within .li-del { opacity: 1; }
 .li-empty {
-  color: #9a9a9e;
+  color: var(--text-muted);
   font-size: 12.5px;
   line-height: 1.7;
   padding: 18px 10px;
@@ -1276,7 +1355,7 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
   flex: none;
   width: 28px;
   height: 28px;
-  background: #1c6dff;
+  background: var(--accent-fill);
   color: #fff;
   border-radius: 50%;
   font-size: 13px;
@@ -1293,7 +1372,7 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
 }
 .welcome-step p {
   font-size: 12.5px;
-  color: #555;
+  color: var(--text-faint);
   margin: 0;
   line-height: 1.5;
 }
@@ -1309,13 +1388,13 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
   padding: 10px;
   font-size: 15px;
   font-weight: 600;
-  background: #1c6dff;
+  background: var(--accent-fill);
   color: #fff;
   border: none;
   border-radius: 8px;
   cursor: pointer;
 }
-#welcomeStart:hover { background: #0b59e6; }
+#welcomeStart:hover { background: var(--accent-fill-hover); }
 
 /* ---- shortcuts popover ---- */
 #shortcutsHelp {
@@ -1333,9 +1412,12 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
   cursor: default;
   user-select: none;
 }
-#shortcutsHelp:hover { color: var(--text); border-color: #999; }
+#shortcutsHelp:hover, #shortcutsHelp:focus { color: var(--text); border-color: var(--text-muted); }
 .sc-popover {
   display: none;
+  /* 親の「?」の太字を継がない（一覧が全部太字で読みにくかった） */
+  font-weight: 400;
+  cursor: default;
   position: absolute;
   right: 0;
   top: 100%;
@@ -1348,7 +1430,8 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
   z-index: 200;
   text-align: left;
 }
-#shortcutsHelp:hover .sc-popover { display: block; }
+#shortcutsHelp:hover .sc-popover,
+#shortcutsHelp:focus-within .sc-popover { display: block; }
 .sc-popover b {
   display: block;
   font-size: 13px;
@@ -1366,7 +1449,7 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
   padding: 2px 6px;
   border-radius: 4px;
   text-align: right;
-  color: #444;
+  color: var(--text-secondary);
   white-space: nowrap;
   text-transform: uppercase;
 }
@@ -1410,7 +1493,7 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
 #exportPreview h4 { font-size: 1em; }
 #exportPreview h5, #exportPreview h6 { font-size: .92em; color: var(--text-faint); }
 #exportPreview :is(h1, h2, h3, h4, h5, h6):first-child { margin-top: 2px; }
-#exportPreview blockquote { border-left: 3px solid #1c6dff; margin: 12px 0; padding: 4px 12px; color: #555; }
+#exportPreview blockquote { border-left: 3px solid var(--accent); margin: 12px 0; padding: 4px 12px; color: var(--text-faint); }
 #exportPreview pre { background: var(--disabled-bg); padding: 12px; border-radius: 6px; overflow-x: auto; }
 @media print {
   body > *:not(#exportDialog) { display: none !important; }
@@ -1446,11 +1529,11 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
   border-radius: 6px;
 }
 .confirm-buttons .danger {
-  background: #e53e3e;
+  background: var(--danger);
   color: #fff;
-  border-color: #e53e3e;
+  border-color: var(--danger);
 }
-.confirm-buttons .danger:hover { background: #c53030; }
+.confirm-buttons .danger:hover { background: #b71c1c; }
 
 /* ---- dark mode overrides ---- */
 [data-theme="dark"] dialog {
@@ -1458,7 +1541,7 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
   color: var(--text);
 }
 [data-theme="dark"] dialog::backdrop { background: rgba(0,0,0,0.55); }
-[data-theme="dark"] .settings-head button { color: #999; }
+[data-theme="dark"] .settings-head button { color: var(--text-muted); }
 [data-theme="dark"] .settings-body label { color: var(--text-secondary); }
 [data-theme="dark"] .settings-body select,
 [data-theme="dark"] .settings-body input[type="text"],
@@ -1469,10 +1552,12 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
 }
 [data-theme="dark"] .settings-help summary { color: var(--accent); }
 [data-theme="dark"] .settings-help a { color: var(--accent); }
-[data-theme="dark"] .settings-foot button { background: var(--accent); }
-[data-theme="dark"] .settings-foot button:hover { background: var(--accent-hover); }
-[data-theme="dark"] #openBtn { background: var(--accent); border-color: var(--accent); }
-[data-theme="dark"] #openBtn:hover { background: var(--accent-hover); }
+[data-theme="dark"] .settings-foot button { background: var(--accent-fill); }
+[data-theme="dark"] .settings-foot button:hover { background: var(--accent-fill-hover); }
+[data-theme="dark"] .codex-login-btn { background: var(--accent-fill); color: #fff; }
+[data-theme="dark"] .codex-login-btn:hover { background: var(--accent-fill-hover); }
+[data-theme="dark"] #openBtn { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
+[data-theme="dark"] #openBtn:hover { background: var(--accent-fill-hover); }
 [data-theme="dark"] button { background: var(--bg-surface); border-color: var(--border-light); color: var(--text); }
 [data-theme="dark"] button:hover { background: var(--bg-hover); }
 [data-theme="dark"] select { background: var(--bg-input); color: var(--text); border-color: var(--border-light); }
@@ -1482,7 +1567,8 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
 [data-theme="dark"] textarea { background: var(--bg-input); color: var(--text); border-color: var(--border-input); }
 [data-theme="dark"] ::placeholder { color: #666; }
 [data-theme="dark"] .CodeMirror-placeholder { color: #666 !important; }
-[data-theme="dark"] #memoToggle.active { background: var(--accent); border-color: var(--accent); }
+[data-theme="dark"] #memoToggle.active { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
+[data-theme="dark"] #layoutBtn.active { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
 [data-theme="dark"] #sidePane { background: var(--bg); border-left-color: var(--border); }
 [data-theme="dark"] #pdfPane { background: var(--bg); }
 [data-theme="dark"] #resizer { background: var(--bg-drag); }
@@ -1493,20 +1579,26 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
 [data-theme="dark"] .card .toolbar { border-top-color: var(--border); }
 [data-theme="dark"] .card .body h2 { color: var(--accent); }
 [data-theme="dark"] .card.loading .body::after { color: var(--accent); }
-[data-theme="dark"] .card.ask .src { background: #1a1e2a; }
+[data-theme="dark"] .card.ask .src { background: var(--accent-soft-bg); color: var(--accent-soft-text); }
 [data-theme="dark"] #memoEdit .CodeMirror { background: var(--bg-input); color: var(--text); border-color: var(--border-input); }
 [data-theme="dark"] #memoEdit .CodeMirror.cm-readonly { background: var(--disabled-bg); }
-[data-theme="dark"] .confirm-buttons .danger { background: var(--danger); border-color: var(--danger); }
+/* CodeMirror 既定の黒カーソル・薄灰の選択色はダークで見えないので上書き */
+[data-theme="dark"] .CodeMirror-cursor { border-left-color: var(--text); }
+[data-theme="dark"] .CodeMirror-selected { background: #3a3f4b; }
+[data-theme="dark"] .CodeMirror-focused .CodeMirror-selected { background: #33476b; }
+[data-theme="dark"] .cm-s-default .cm-link { color: var(--accent); }
+[data-theme="dark"] .cm-s-default .cm-url { color: var(--text-muted); }
+[data-theme="dark"] .confirm-buttons .danger { background: #c62828; border-color: #c62828; }
 [data-theme="dark"] #modeBtn { background: var(--bg-hover); border-color: var(--border-light); color: var(--text); }
 [data-theme="dark"] #modeBtn:hover { background: #444; }
-[data-theme="dark"] @keyframes mode-flash { 0% { background: #2a3a5a; } 100% { background: var(--bg-hover); } }
+[data-theme="dark"] #modeBtn.flash { animation-name: mode-flash-dark; }
+@keyframes mode-flash-dark { 0% { background: #2a3a5a; } 100% { background: var(--bg-hover); } }
 [data-theme="dark"] #listPane { background: var(--bg-surface); border-right-color: var(--border); }
 [data-theme="dark"] .li-item:hover { background: var(--bg-hover); }
-[data-theme="dark"] .li-item.active { background: var(--bg-hover); }
+[data-theme="dark"] .li-item.active { background: rgba(77, 142, 255, .18); }
 [data-theme="dark"] .welcome { background: var(--bg-surface); color: var(--text); }
-[data-theme="dark"] .welcome-step { background: var(--bg-hover); }
+[data-theme="dark"] .welcome-step { background: var(--bg-hover); padding: 10px 12px; border-radius: 10px; }
 [data-theme="dark"] input[type="range"] { accent-color: var(--accent); }
-[data-theme="dark"] input[type="range"]::-webkit-slider-runnable-track { background: #444; }
 [data-theme="dark"] #memoDrag { background: var(--bg-drag); }
 [data-theme="dark"] #memoDrag:hover { background: #555; }
 [data-theme="dark"] #memoHead { border-bottom-color: var(--border); }
@@ -1521,6 +1613,6 @@ button.danger:hover { background: #c0362c; color: #fff; border-color: #c0362c; }
 [data-theme="dark"] #findInput { background: var(--bg-input); color: var(--text); border-color: var(--border-input); }
 [data-theme="dark"] .col-resizer { background: var(--bg-drag); }
 [data-theme="dark"] .col-resizer:hover { background: #555; }
-[data-theme="dark"] .confirm-buttons .danger:hover { background: #c62828; }
+[data-theme="dark"] .confirm-buttons .danger:hover { background: #b71c1c; }
 [data-theme="dark"] .toggle-track { background: #555; }
 [data-theme="dark"] .toggle-track::after { background: #ddd; }
