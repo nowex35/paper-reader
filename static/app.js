@@ -60,6 +60,8 @@ const I18n = (() => {
       el.innerHTML = t(el.dataset.i18nHtml);
     });
     document.documentElement.lang = lang;
+    // 件数入りの aria-label など、静的な data-i18n で表せない箇所の再設定用
+    document.dispatchEvent(new Event("i18n-applied"));
   }
 
   // 翻訳の読み込み完了を待つための Promise。
@@ -1554,6 +1556,18 @@ const Ask = (() => {
   });
 
   if (checkbox) checkbox.addEventListener("change", toggle);
+
+  // 標準レイアウトの下パネル（メモ）を AI パネルの左端で止めるため、
+  // AI パネル＋リサイザの幅を --side-w として渡す。全幅のままだとメモ右端の
+  // 操作ボタン（プレビュー・PDF・削除・閉じる）が AI パネルの下に隠れて押せない。
+  if (window.ResizeObserver) {
+    const main = document.getElementById("main");
+    const sync = () =>
+      main.style.setProperty("--side-w", pane.offsetWidth + (resizer ? resizer.offsetWidth : 0) + "px");
+    const ro = new ResizeObserver(sync);
+    ro.observe(pane);
+    if (resizer) ro.observe(resizer);
+  }
 })();
 
 /* ---------- サイドペイン幅リサイズ ---------- */
@@ -1669,7 +1683,13 @@ const Bookmarks = (() => {
     }).catch(() => flash(I18n.t("bookmark.save_failed")));
   }
   function updateBadge() {
-    if (btn) btn.textContent = items.length;
+    if (btn) {
+      btn.textContent = items.length;
+      // 見えている件数も読み上げ名に含める（表示とラベルの不一致を解消）
+      I18n.ready.then(() => {
+        btn.setAttribute("aria-label", I18n.t("bookmark.toggle_aria_count", { count: items.length }));
+      });
+    }
     const group = document.getElementById("bookmarkGroup");
     if (group) group.classList.toggle("empty", items.length === 0);
   }
@@ -1920,6 +1940,7 @@ const Bookmarks = (() => {
   });
 
   updateBadge();
+  document.addEventListener("i18n-applied", updateBadge);
   return { load, renderMarkers, toggle, next, prev, clear };
 })();
 
@@ -2611,6 +2632,10 @@ const Memo = (() => {
       },
     });
     cm.on("change", markDirty);
+    // CodeMirror が差し込む入力欄に読み上げ名を付ける（言語切替も data-i18n-aria で追従）
+    const cmInput = cm.getInputField();
+    cmInput.dataset.i18nAria = "memo.body_aria";
+    I18n.ready.then(() => cmInput.setAttribute("aria-label", I18n.t("memo.body_aria")));
   } else {
     bodyEl.addEventListener("input", markDirty);
     attachListEditing(bodyEl);
@@ -2692,7 +2717,8 @@ const Memo = (() => {
       Math.max(window.innerHeight - e.clientY, 140),
       window.innerHeight * 0.7
     );
-    panel.style.setProperty("--memo-h", h + "px");
+    // 親（#main）に置き、PDF 右下のフィットボタンもメモの上へ逃がせるようにする
+    panel.parentElement.style.setProperty("--memo-h", h + "px");
   });
   document.addEventListener("mouseup", () => {
     if (!dh) return;
@@ -2705,7 +2731,7 @@ const Memo = (() => {
   });
 
   const savedH = localStorage.getItem("memoH");
-  if (savedH) panel.style.setProperty("--memo-h", savedH);
+  if (savedH) panel.parentElement.style.setProperty("--memo-h", savedH);
   setEditable(false);
   if (localStorage.getItem("memoPreview") === "1") setPreview(true);
   if (localStorage.getItem("memoOpen") === "1") setOpen(true);
@@ -2785,8 +2811,19 @@ const Memo = (() => {
       li.innerHTML =
         '<div class="li-main"><div class="li-title"></div>' +
         '<div class="li-sub"></div></div>' +
-        '<button class="li-del" title="削除">×</button>';
+        '<button class="li-del">×</button>';
       li.querySelector(".li-title").textContent = n.title || I18n.t("list.untitled");
+      const del = li.querySelector(".li-del");
+      del.title = I18n.t("list.delete_title");
+      del.setAttribute("aria-label", I18n.t("list.delete_aria", { title: n.title || I18n.t("list.untitled") }));
+      // Tab でも一覧をたどれるように本体をフォーカス可能にし、矢印キーの位置と同期する
+      const main = li.querySelector(".li-main");
+      main.tabIndex = 0;
+      main.setAttribute("role", "button");
+      main.addEventListener("focus", () => {
+        // マウスで押したときは枠を出さない（キーボード移動のときだけ同期）
+        if (main.matches(":focus-visible")) setFocus([...itemsEl.querySelectorAll(".li-item")].indexOf(li));
+      });
       li.querySelector(".li-sub").textContent =
         fmtDate(n.updated) + (n.pdf ? " · " + n.pdf : "");
       li.querySelector(".li-main").onclick = async () => {
@@ -2858,7 +2895,9 @@ const Memo = (() => {
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setFocus(focusIdx - 1);
-    } else if (e.key === "Enter" && focusIdx >= 0) {
+    } else if ((e.key === "Enter" || (e.key === " " && e.target.classList.contains("li-main"))) &&
+               focusIdx >= 0 && !e.target.closest("button")) {
+      // 削除ボタン上の Enter は削除として扱う（論文を開かない）
       e.preventDefault();
       activateFocused();
       setOpen(false);
@@ -2923,7 +2962,6 @@ const Memo = (() => {
 (() => {
   const btn = document.getElementById("layoutBtn");
   const LAYOUTS = ["standard", "columns"];
-  const LABELS = { standard: "⧉", columns: "⧉" };
   if (!btn) return;
 
   // A4縦 = 1:1.414, 16:9スライド = 1.778:1
@@ -2951,9 +2989,9 @@ const Memo = (() => {
 
   function apply(layout) {
     document.body.dataset.layout = layout;
-    btn.textContent = LABELS[layout] || "⧉";
     btn.title = layout === "standard" ? I18n.t("topbar.layout_to_columns") : I18n.t("topbar.layout_to_standard");
     btn.classList.toggle("active", layout === "columns");
+    btn.setAttribute("aria-pressed", String(layout === "columns"));
     const panel = document.getElementById("memoPanel");
     const memoResizer = document.getElementById("memoResizer");
 
