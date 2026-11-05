@@ -434,7 +434,9 @@ def ollama_status() -> dict:
     try:
         r = httpx.get(f"{OLLAMA_HOST}/api/tags", timeout=2.0)
         r.raise_for_status()
-        models = [m.get("name", "") for m in r.json().get("models", [])]
+        # PLaMo 3 Translate は翻訳専用で解説の指示に従えないので、解説モデルの候補に出さない
+        models = [m.get("name", "") for m in r.json().get("models", [])
+                  if "plamo-3-translate" not in m.get("name", "")]
     except Exception:  # noqa: BLE001
         return {"running": False, "model_present": False,
                 "model": CURRENT_MODEL, "models": []}
