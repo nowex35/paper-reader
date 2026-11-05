@@ -28,8 +28,9 @@ TRANSLATE_MODEL = "hf.co/pfnet/plamo-3-translate-2b-GGUF:Q4_K_M"
 # .app から起動された場合、ランチャがバンドルのパスを渡してくる。
 BUNDLE_PATH = os.environ.get("NARUHODO_BUNDLE_PATH", "")
 
-# 同梱 Ollama を待ち受けさせるポート。起動時に空きポートへ差し替える。
-# 標準の 11434 は使わない（ユーザー自身の Ollama のために空けておく）。
+# 接続先 Ollama のポート。同梱 Ollama を起動するときだけ空きポートへ差し替え、
+# 標準の 11434 はユーザー自身の Ollama のために空けておく。同梱バイナリがない
+# 開発環境では、この初期値のまま標準ポートの Ollama につなぐ。
 OLLAMA_PORT = 11434
 
 # .env 等で接続先が明示されている場合の URL。設定時は OLLAMA_PORT より優先。
