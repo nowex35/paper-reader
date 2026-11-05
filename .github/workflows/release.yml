@@ -136,6 +136,7 @@ jobs:
                 <title>Version ${VERSION}</title>
                 <sparkle:version>${BUILD}</sparkle:version>
                 <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+                <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
                 <pubDate>$(date -R)</pubDate>
                 <description><![CDATA[${NOTES_HTML}]]></description>
                 <enclosure url="https://github.com/nowex35/paper-reader/releases/download/${TAG}/Naruhodo.zip"
