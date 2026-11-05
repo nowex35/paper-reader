@@ -48,7 +48,7 @@ PBS_PYTHON="3.14.6"
 PY_MINOR="${PBS_PYTHON%.*}"
 
 # 同梱する Ollama のバージョン（更新時はここだけ変える）
-OLLAMA_VERSION="0.30.11"
+OLLAMA_VERSION="0.40.14"
 
 echo "📦 Naruhodo.app をパッケージング中…"
 
