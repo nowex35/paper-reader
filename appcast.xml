@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Naruhodo</title>
+    <item>
+      <title>Version 1.6.2</title>
+      <sparkle:version>90</sparkle:version>
+      <sparkle:shortVersionString>1.6.2</sparkle:shortVersionString>
+      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+      <pubDate>Thu, 05 Nov 2026 15:04:12 +0000</pubDate>
+      <description><![CDATA[<ul><li>v1.6.2: 見やすさと使いやすさを改善</li>
+<li>文字やボタンのコントラストを上げ、読みやすくしました</li>
+<li>ダークモードで、スクロールバーや入力欄も暗い色で表示されるようになりました</li>
+<li>キーボードだけで操作しやすくなりました（フォーカス位置の表示、論文一覧を Tab と Enter で開く、ショートカット一覧やしおりのヘルプを Tab で開く）</li>
+<li>論文一覧の × を選んで Enter を押すと、削除ではなく論文が開いてしまう問題を修正しました</li>
+<li>標準レイアウトでメモを開くと、メモ右上のボタンが AI パネルに隠れて押せない問題を修正しました</li>
+<li>設定画面のスイッチやスライダーの配置の崩れを修正しました</li>
+<li>ウィンドウが狭いときに質問欄の案内文が崩れる問題を修正しました</li>
+<li>VoiceOver などの読み上げで、ボタンや入力欄の名前が読まれるようになりました</li>
+<li>macOS の「視差効果を減らす」をオンにしていると、アニメーションを止めるようになりました</li>
+<li>案内文に書かれていたショートカットの誤りを修正しました（しおりの追加は ⌘D、レイアウト切替は ⌘.）</li></ul>]]></description>
+      <enclosure url="https://github.com/nowex35/paper-reader/releases/download/v1.6.2/Naruhodo.zip"
+       sparkle:edSignature="UTg5aiv3joK0TsPTsThlUhzmjJkvd9rwhATfbkp5aY3OJkS2Jcg/9k9oybPHw65nQZDiNSDsXzpKoa/uHmnNAw=="
+       length="86200712"
+       type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>
